@@ -1,0 +1,88 @@
+[project]
+name = "ai-lexi-loop"
+version = "0.1.0"
+description = "Personal AI-powered English trainer delivered via Telegram"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.13,<4",
+    "alembic>=1.13",
+    "asyncpg>=0.29",
+    "fastapi>=0.115",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy[asyncio]>=2.0.35",
+    "uvicorn[standard]>=0.30",
+]
+
+[dependency-groups]
+dev = [
+    "asgi-lifespan>=2.1",
+    "black>=24.8",
+    "httpx>=0.27",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.black]
+line-length = 88
+target-version = ["py312", "py313"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+# RUF001 flags Cyrillic letters inside string literals as "ambiguous
+# Unicode"; user-facing bot texts are intentionally Russian, so the rule
+# is disabled for strings. RUF002/RUF003 (docstrings, comments) stay on.
+ignore = ["RUF001"]
+select = [
+    "A",    # flake8-builtins
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "RET",  # flake8-return
+    "RUF",  # ruff-specific rules
+    "SIM",  # flake8-simplify
+    "T20",  # flake8-print
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Alembic templates and hand-written migrations are executed by the migration
+# runtime, not imported by application code; full strictness there adds noise
+# without protecting anything real.
+module = ["migrations.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: tests that require a real PostgreSQL (TEST_DATABASE_URL)",
+]

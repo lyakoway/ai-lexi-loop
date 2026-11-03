@@ -1,0 +1,62 @@
+# Local development stack: PostgreSQL + one-shot migration job + app.
+#
+# Migrations run in a dedicated one-shot service *before* the app starts
+# (`service_completed_successfully`), so multiple app replicas never apply
+# migrations concurrently. The application itself never migrates on boot.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_lexi_loop
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_lexi_loop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ai_lexi_loop
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    # Copy .env.example to .env first: the Telegram token is read from there.
+    env_file:
+      - .env
+    environment:
+      # Inside the compose network the database host is the service name.
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ai_lexi_loop
+      ENVIRONMENT: dev
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  pgdata:

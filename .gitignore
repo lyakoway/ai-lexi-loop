@@ -1,0 +1,28 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+uv.lock.bak
+
+# Local data
+*.sqlite3
+*.log
+# Throwaway PostgreSQL cluster for integration tests
+.test_pg/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store

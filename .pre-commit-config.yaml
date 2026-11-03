@@ -1,0 +1,39 @@
+# Local quality gates, run on every commit.
+#
+# Hooks run through the project's uv-managed virtual environment
+# (language: system), so the exact locked tool versions are used and no
+# duplicate environments are installed by pre-commit itself.
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check .
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: black
+        name: black format
+        entry: uv run black .
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: mypy
+        name: mypy type check
+        entry: uv run mypy .
+        language: system
+        pass_filenames: false
+        types: [python]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # Lock files are legitimately large and are meant to be committed.
+        exclude: ^uv\.lock$
