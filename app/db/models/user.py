@@ -1,4 +1,8 @@
-"""User model: a person training English through the Telegram bot."""
+"""User model: the internal account, independent of sign-in channels.
+
+External identifiers (Telegram ID now, email/OAuth later) live in
+:class:`~app.db.models.identity.UserIdentity`.
+"""
 
 from datetime import datetime
 
@@ -9,12 +13,7 @@ from app.db.base import Base
 
 
 class User(Base):
-    """A trainer user identified by their Telegram account.
-
-    Only fields needed right now are stored; learning-specific tables
-    (profiles, vocabulary, attempts, spaced repetition) will be designed in
-    later stages.
-    """
+    """An internal user account shared by all delivery channels."""
 
     __tablename__ = "users"
 
@@ -22,12 +21,6 @@ class User(Base):
         BigInteger,
         Identity(always=True),
         primary_key=True,
-    )
-    telegram_user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        unique=True,
-        index=True,
-        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -42,4 +35,4 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
-        return f"User(id={self.id!r}, telegram_user_id={self.telegram_user_id!r})"
+        return f"User(id={self.id!r})"

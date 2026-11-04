@@ -1,8 +1,8 @@
 """FastAPI application factory and process lifecycle.
 
-The HTTP API and the Telegram bot run in one process. The lifespan below
-owns every long-lived resource: the database engine, the session factory
-and the supervised bot polling task. Each of them is closed on shutdown,
+The HTTP API and the Telegram bot run in one process. The lifespan owns
+every long-lived resource: the database engine, the session factory and
+the supervised bot polling task. Each of them is closed on shutdown,
 and a polling crash is visible through ``/ready`` (see
 :class:`~app.bot.runner.BotRunner`).
 """
@@ -12,13 +12,20 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
-from app.api.routes import health
+from app.api.middleware import ObservabilityMiddleware
+from app.api.routes import health, v1
 from app.bot.builder import create_bot, create_dispatcher
 from app.bot.runner import BotRunner
 from app.core.config import Settings, get_settings
-from app.db.session import build_engine, build_session_factory
+from app.core.metrics import render_prometheus
+from app.db.session import (
+    SessionFactory,
+    build_engine,
+    build_session_factory,
+)
+from app.repositories import StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +43,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="ai-lexi-loop",
         lifespan=lambda app_: _lifespan(app_, settings),
     )
+    app.add_middleware(ObservabilityMiddleware)
     app.include_router(health.router)
+    app.include_router(v1.router)
     app.add_exception_handler(Exception, _unhandled_error_handler)
+    app.add_exception_handler(StorageError, _storage_error_handler)
+    app.get("/metrics", include_in_schema=False)(_metrics_endpoint)
     return app
 
 
@@ -47,11 +58,32 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
+async def _storage_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Database failures surface as 503, never as silent success.
+
+    Registered for :class:`StorageError`; the wider signature satisfies
+    Starlette's exception-handler protocol.
+    """
+    assert isinstance(exc, StorageError)
+    logger.error("storage error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503, content={"detail": "Service temporarily unavailable"}
+    )
+
+
+async def _metrics_endpoint() -> PlainTextResponse:
+    """Prometheus text exposition of aggregate counters."""
+    return PlainTextResponse(
+        render_prometheus(), media_type="text/plain; version=0.0.4"
+    )
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI, settings: Settings) -> AsyncIterator[None]:
     engine = build_engine(settings)
-    session_factory = build_session_factory(engine)
+    session_factory: SessionFactory = build_session_factory(engine)
     app.state.engine = engine
+    app.state.session_factory = session_factory
 
     bot_runner: BotRunner | None = None
     if settings.bot_enabled:

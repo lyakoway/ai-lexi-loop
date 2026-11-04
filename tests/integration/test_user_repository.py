@@ -1,4 +1,9 @@
-"""Integration tests for user persistence on a real PostgreSQL."""
+"""Integration tests for the identity model on a real PostgreSQL.
+
+Covers the Stage 5 identity requirements: existing Telegram users keep
+one account, an external identity cannot map to two accounts, and
+profiles/progress stay bound to the internal user_id.
+"""
 
 import os
 
@@ -6,9 +11,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import User
-from app.db.session import SessionFactory, session_scope
-from app.repositories import StorageError, UserRepository
+from app.db.session import SessionFactory
+from app.repositories import ProfileRepository, StorageError, UserRepository
+from app.schemas.profile import ProfileCreate
 
 pytestmark = [
     pytest.mark.integration,
@@ -19,66 +24,127 @@ pytestmark = [
 ]
 
 
-async def test_migration_creates_users_table(
-    migrated_db: None,
-    session_factory: SessionFactory,
-) -> None:
-    """The Alembic migration must produce the expected table shape."""
-    async with session_factory() as session:
-        rows = await session.execute(
-            text(
-                "SELECT column_name, is_nullable FROM "
-                "information_schema.columns WHERE table_name = 'users'"
-            )
-        )
-        columns = {row[0]: row[1] for row in rows}
-    assert columns == {
-        "id": "NO",
-        "telegram_user_id": "NO",
-        "created_at": "NO",
-        "updated_at": "NO",
+def profile_payload() -> dict[str, object]:
+    return {
+        "native_language": "ru",
+        "target_language": "en",
+        "level": "A1",
+        "learning_goal": "work",
+        "topics": ["work"],
+        "preferred_accent": "uk",
+        "daily_study_minutes": 15,
+        "new_items_per_day": 5,
+        "lesson_time": "08:00",
+        "review_time": "19:00",
+        "timezone": "Europe/Moscow",
     }
 
 
-async def test_get_or_create_creates_then_reuses(
-    db_session: AsyncSession,
-) -> None:
-    repository = UserRepository(db_session)
-
-    created_user, created = await repository.get_or_create(777)
-    assert created is True
-    assert created_user.id is not None
-    assert created_user.created_at is not None
-
-    same_user, created_again = await repository.get_or_create(777)
-    assert created_again is False
-    assert same_user.id == created_user.id
-
-
-async def test_telegram_user_id_is_unique(db_session: AsyncSession) -> None:
-    """A second user with the same Telegram ID must be rejected by the DB."""
-    repository = UserRepository(db_session)
-    await repository.create(999)
-
-    with pytest.raises(StorageError) as exc_info:
-        await repository.create(999)
-
-    assert exc_info.value.conflict is True
-    # After a failed flush the transaction can only be rolled back; do it
-    # here so the fixture's commit-on-exit stays valid.
-    await db_session.rollback()
-
-
-async def test_separate_sessions_see_persisted_users(
+async def test_users_table_has_no_external_ids(
     migrated_db: None,
     session_factory: SessionFactory,
 ) -> None:
-    """A committed user must be visible from a new session."""
-    async with session_scope(session_factory) as session:
-        await UserRepository(session).create(555)
+    """The internal account carries no channel identifiers anymore."""
+    async with session_factory() as session:
+        rows = await session.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'users'"
+            )
+        )
+        columns = {row[0] for row in rows}
+    assert columns == {"id", "created_at", "updated_at"}
 
-    async with session_scope(session_factory) as session:
-        user = await UserRepository(session).get_by_telegram_id(555)
-        assert user is not None
-        assert isinstance(user, User)
-        assert user.telegram_user_id == 555
+
+async def test_identity_table_enforces_unique_pairs(
+    migrated_db: None,
+    session_factory: SessionFactory,
+) -> None:
+    async with session_factory() as session:
+        rows = await session.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'user_identities'"
+            )
+        )
+        columns = {row[0] for row in rows}
+        constraints = await session.execute(
+            text(
+                "SELECT conname FROM pg_constraint "
+                "WHERE conrelid = 'user_identities'::regclass"
+            )
+        )
+        names = {row[0] for row in constraints}
+    assert {
+        "id",
+        "user_id",
+        "provider",
+        "provider_user_id",
+        "created_at",
+        "updated_at",
+    } == columns
+    assert "uq_user_identities_provider_provider_user_id" in names
+
+
+async def test_one_telegram_identity_one_account(db_session: AsyncSession) -> None:
+    """Repeated registration returns the same internal user."""
+    repository = UserRepository(db_session)
+
+    first, created_first = await repository.get_or_create_by_identity(
+        "telegram", "4242"
+    )
+    second, created_second = await repository.get_or_create_by_identity(
+        "telegram", "4242"
+    )
+
+    assert created_first is True
+    assert created_second is False
+    assert first.id == second.id
+
+
+async def test_same_provider_id_for_two_users_conflicts(
+    db_session: AsyncSession,
+) -> None:
+    """The same Telegram ID can never bind to a second account."""
+    repository = UserRepository(db_session)
+    first, _ = await repository.get_or_create_by_identity("telegram", "1111")
+    second, _ = await repository.get_or_create_by_identity("telegram", "2222")
+
+    with pytest.raises(StorageError) as exc_info:
+        await repository.link_identity(second.id, "telegram", "1111")
+
+    assert exc_info.value.conflict is True
+    # The conflict was detected before any write; the first binding
+    # stays intact without a rollback.
+    found = await repository.get_by_identity("telegram", "1111")
+    assert found is not None and found[0].id == first.id
+
+
+async def test_profile_and_progress_follow_internal_user(
+    db_session: AsyncSession,
+) -> None:
+    """User data stays reachable through the internal user_id."""
+    repository = UserRepository(db_session)
+    user, _ = await repository.get_or_create_by_identity("telegram", "3333")
+    await ProfileRepository(db_session).create(
+        ProfileCreate.model_validate(profile_payload()), user.id
+    )
+
+    found = await repository.get_by_identity("telegram", "3333")
+    assert found is not None
+    resolved_user, _identity = found
+    profiles = await ProfileRepository(db_session).get_by_user_id(resolved_user.id)
+    assert profiles is not None
+    assert profiles.timezone == "Europe/Moscow"
+
+
+async def test_multiple_identities_one_user(db_session: AsyncSession) -> None:
+    """One internal account can own several external identities."""
+    repository = UserRepository(db_session)
+    user, _ = await repository.get_or_create_by_identity("telegram", "4444")
+
+    linked = await repository.link_identity(user.id, "email", "user@example.com")
+
+    assert linked.provider == "email"
+    found = await repository.get_by_identity("email", "user@example.com")
+    assert found is not None and found[0].id == user.id

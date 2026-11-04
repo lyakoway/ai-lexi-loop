@@ -85,7 +85,8 @@ def make_mock_session(
     session.add = MagicMock()
     session.execute = AsyncMock(side_effect=execute_side_effect)
     session.execute.return_value = MagicMock(
-        scalar_one_or_none=MagicMock(return_value=None)
+        scalar_one_or_none=MagicMock(return_value=None),
+        first=MagicMock(return_value=None),
     )
     session.flush = AsyncMock(side_effect=flush_side_effect)
     return session
@@ -102,7 +103,7 @@ async def test_get_or_create_reports_conflict() -> None:
     repository = UserRepository(session)
 
     with pytest.raises(StorageError) as exc_info:
-        await repository.get_or_create(telegram_user_id=42)
+        await repository.get_or_create_by_identity("telegram", "42")
 
     assert exc_info.value.conflict is True
 
@@ -118,7 +119,7 @@ async def test_storage_errors_hide_sqlalchemy_details() -> None:
     repository = UserRepository(session)
 
     with pytest.raises(StorageError) as exc_info:
-        await repository.get_by_telegram_id(telegram_user_id=42)
+        await repository.get_by_identity("telegram", "42")
 
     assert exc_info.value.conflict is False
     assert isinstance(exc_info.value.__cause__, OperationalError)
