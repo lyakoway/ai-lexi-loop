@@ -145,3 +145,20 @@ def build_generation_messages(
         "Generate the JSON set now."
     )
     return system, user
+
+
+CHAT_PROMPT_VERSION = "tutor_chat_v1"
+
+
+def build_chat_messages(
+    *,
+    system_prompt: str,
+    context_block: str,
+) -> tuple[str, str]:
+    """Return ``(system, user)`` messages for ``tutor_chat_v1``.
+
+    ``system_prompt`` and ``context_block`` are rendered by
+    :mod:`app.services.tutor.chat_context`; this function only wraps
+    them into the message pair, keeping prompt versioning in one module.
+    """
+    return system_prompt, context_block

@@ -7,10 +7,14 @@ Every read is user-scoped so foreign conversations and messages are
 indistinguishable from non-existent ones.
 """
 
-from sqlalchemy import select
+import uuid
+from datetime import datetime, timedelta
+
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import TutorConversation, TutorMessage
+from app.domain.srs import utc_now
 from app.repositories.errors import wrap_storage_errors
 
 
@@ -84,6 +88,138 @@ class TutorConversationRepository:
                 )
             )
             return list(result.scalars().all())
+
+    async def try_claim(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        claim_id: uuid.UUID,
+        min_interval_seconds: float,
+        claim_timeout_seconds: float,
+        now: datetime,
+    ) -> str:
+        """Atomically claim generation for a conversation.
+
+        Returns ``claimed``, or why the claim was refused: ``busy``
+        (another generation holds a fresh claim), ``rate_limited`` (the
+        previous attempt — successful or not — is too recent),
+        ``closed`` or ``not_found``. The pre-check determines the
+        reported reason; the conditional UPDATE stays atomic, so a
+        parallel claim winning the race also reports ``busy``.
+        """
+        async with wrap_storage_errors():
+            state = await self._session.execute(
+                select(
+                    TutorConversation.status,
+                    TutorConversation.generation_started_at,
+                    TutorConversation.last_generation_at,
+                ).where(
+                    TutorConversation.id == conversation_id,
+                    TutorConversation.user_id == user_id,
+                )
+            )
+            row = state.first()
+            if row is None:
+                return "not_found"
+            status, generation_started_at, last_generation_at = row
+            if status != "active":
+                return "closed"
+            if (
+                generation_started_at is not None
+                and generation_started_at
+                > now - timedelta(seconds=claim_timeout_seconds)
+            ):
+                return "busy"
+            if last_generation_at is not None and last_generation_at > now - timedelta(
+                seconds=min_interval_seconds
+            ):
+                return "rate_limited"
+
+            result = await self._session.execute(
+                update(TutorConversation)
+                .where(
+                    TutorConversation.id == conversation_id,
+                    TutorConversation.user_id == user_id,
+                    TutorConversation.status == "active",
+                    or_(
+                        TutorConversation.generation_started_at.is_(None),
+                        TutorConversation.generation_started_at
+                        <= now - timedelta(seconds=claim_timeout_seconds),
+                    ),
+                    or_(
+                        TutorConversation.last_generation_at.is_(None),
+                        TutorConversation.last_generation_at
+                        <= now - timedelta(seconds=min_interval_seconds),
+                    ),
+                )
+                .values(
+                    generation_started_at=now,
+                    generation_claim_id=claim_id,
+                    last_generation_at=now,
+                )
+                .returning(TutorConversation.id)
+            )
+            if result.first() is None:
+                # The race was won by a parallel claim.
+                return "busy"
+            return "claimed"
+
+    async def release_claim(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        claim_id: uuid.UUID,
+    ) -> bool:
+        """Release the claim only if this request still owns it (fencing).
+
+        ``False`` means the claim was already stolen by another request
+        (its timeout elapsed) — touching it now would be destructive.
+        """
+        async with wrap_storage_errors():
+            result = await self._session.execute(
+                update(TutorConversation)
+                .where(
+                    TutorConversation.id == conversation_id,
+                    TutorConversation.user_id == user_id,
+                    TutorConversation.generation_claim_id == claim_id,
+                )
+                .values(generation_started_at=None, generation_claim_id=None)
+                .returning(TutorConversation.id)
+            )
+            return result.first() is not None
+
+    async def close(self, *, user_id: int, conversation_id: int) -> bool:
+        """Close an active conversation owned by the user."""
+        async with wrap_storage_errors():
+            result = await self._session.execute(
+                update(TutorConversation)
+                .where(
+                    TutorConversation.id == conversation_id,
+                    TutorConversation.user_id == user_id,
+                    TutorConversation.status == "active",
+                )
+                .values(status="closed", closed_at=utc_now())
+                .returning(TutorConversation.id)
+            )
+            return result.first() is not None
+
+    async def delete(self, *, user_id: int, conversation_id: int) -> bool:
+        """Delete a conversation owned by the user (messages cascade)."""
+        async with wrap_storage_errors():
+            result = await self._session.execute(
+                select(TutorConversation).where(
+                    TutorConversation.id == conversation_id,
+                    TutorConversation.user_id == user_id,
+                )
+            )
+            conversation = result.scalar_one_or_none()
+            if conversation is None:
+                return False
+            await self._session.delete(conversation)
+            await self._session.flush()
+            return True
 
 
 class TutorMessageRepository:
@@ -183,3 +319,91 @@ class TutorMessageRepository:
                 )
             )
             return result.scalar_one_or_none()
+
+    async def finalize_exchange(
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        claim_id: uuid.UUID,
+        user_text: str,
+        assistant_text: str,
+        client_request_id: str | None,
+        prompt_version: str,
+        max_messages: int,
+    ) -> TutorMessage | None:
+        """Atomically save the (user, assistant) pair, bump the counter,
+        auto-close at the limit and release the claim.
+
+        Fencing: the conversation UPDATE matches the ``claim_id``, so a
+        request whose claim was stolen (timeout elapsed and another
+        request took over) changes nothing and ``None`` is returned —
+        the winner's state stays untouched.
+        """
+        async with wrap_storage_errors():
+            try:
+                async with self._session.begin_nested():
+                    conversation = await self._session.execute(
+                        select(TutorConversation)
+                        .where(
+                            TutorConversation.id == conversation_id,
+                            TutorConversation.user_id == user_id,
+                            TutorConversation.generation_claim_id == claim_id,
+                        )
+                        .with_for_update()
+                    )
+                    row = conversation.scalar_one_or_none()
+                    if row is None:
+                        # Fencing: the claim was stolen after its timeout
+                        # — the savepoint rolls back everything below.
+                        raise _ClaimLostError()
+
+                    # Clamp keeps the counter exactly at the limit even
+                    # if a non-even count ever appears (defensive; the
+                    # service always adds pairs, so counts stay even).
+                    new_count = min(row.message_count + 2, max_messages)
+                    user_message = TutorMessage(
+                        conversation_id=conversation_id,
+                        role="user",
+                        text=user_text,
+                        client_request_id=client_request_id,
+                    )
+                    self._session.add(user_message)
+                    await self._session.flush()
+                    self._session.add(
+                        TutorMessage(
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            text=assistant_text,
+                            prompt_version=prompt_version,
+                            in_reply_to_message_id=user_message.id,
+                        )
+                    )
+                    # Close as soon as the pair reaches the limit, and
+                    # release the claim. Explicit UPDATE: deterministic
+                    # counter/close/release in one statement, fenced by
+                    # the claim id (the savepoint rolls the whole block
+                    # back if the claim was stolen).
+                    closing = new_count >= max_messages
+                    await self._session.execute(
+                        update(TutorConversation)
+                        .where(
+                            TutorConversation.id == conversation_id,
+                            TutorConversation.user_id == user_id,
+                            TutorConversation.generation_claim_id == claim_id,
+                        )
+                        .values(
+                            message_count=new_count,
+                            status="closed" if closing else "active",
+                            closed_at=utc_now() if closing else None,
+                            generation_started_at=None,
+                            generation_claim_id=None,
+                        )
+                    )
+            except _ClaimLostError:
+                return None
+            return user_message
+
+
+class _ClaimLostError(Exception):
+    """Internal: the fencing claim belongs to another request."""

@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 30.0
     llm_retry_attempts: int = 2
     llm_max_output_tokens: int = 1024
+    # AI Tutor Chat (Stage 6.4).
+    llm_chat_min_interval_seconds: float = 3.0
+    # None → calculated from the full LlmClient budget (initial + repair
+    # attempts); a manual value below that budget is rejected at startup.
+    llm_chat_claim_timeout_seconds: int | None = None
 
     @field_validator("log_level")
     @classmethod
@@ -65,6 +70,13 @@ class Settings(BaseSettings):
     @field_validator("llm_retry_attempts")
     @classmethod
     def _validate_not_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("must not be negative")
+        return value
+
+    @field_validator("llm_chat_min_interval_seconds")
+    @classmethod
+    def _validate_interval_not_negative(cls, value: float) -> float:
         if value < 0:
             raise ValueError("must not be negative")
         return value
@@ -100,6 +112,47 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"LLM_ENABLED=true requires {', '.join(missing)} to be set"
                 )
+        return self
+
+    @property
+    def calculated_chat_claim_timeout_seconds(self) -> int:
+        """Full LlmClient budget: initial + repair, each with retries.
+
+        Verified against the Stage 6.1 implementation: every
+        ``complete()`` is bounded by ``timeout * (attempts + 1)`` (all
+        retries, backoffs and the response-format fallback happen inside
+        that deadline), and ``complete_structured`` performs up to two
+        full ``complete()`` calls (initial + repair). A 10% margin covers
+        network gaps and the final database writes.
+        """
+        import math
+
+        return math.ceil(
+            2 * self.llm_timeout_seconds * (self.llm_retry_attempts + 1) * 1.1
+        )
+
+    @property
+    def chat_claim_timeout_seconds(self) -> int:
+        """Effective claim timeout: manual override or the calculated budget."""
+        if self.llm_chat_claim_timeout_seconds is not None:
+            return self.llm_chat_claim_timeout_seconds
+        return self.calculated_chat_claim_timeout_seconds
+
+    @model_validator(mode="after")
+    def _validate_chat_claim_timeout(self) -> "Settings":
+        """A manual claim timeout below the calculated LLM budget would
+        let another request steal the claim before the regular call
+        finishes — reject it at startup instead of at chat time."""
+        minimum = self.calculated_chat_claim_timeout_seconds
+        if (
+            self.llm_chat_claim_timeout_seconds is not None
+            and self.llm_chat_claim_timeout_seconds < minimum
+        ):
+            raise ValueError(
+                "LLM_CHAT_CLAIM_TIMEOUT_SECONDS must be at least "
+                f"{minimum} (the calculated LlmClient budget: initial + "
+                "repair attempts); increase it or leave it unset"
+            )
         return self
 
     @property

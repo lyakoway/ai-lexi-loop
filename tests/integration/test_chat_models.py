@@ -6,6 +6,7 @@ the up/down/up migration cycle.
 """
 
 import os
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -451,3 +452,33 @@ async def test_list_for_user_and_get_active(
         listed = await conversation_repo.list_for_user(user_id)
         assert [conversation.id for conversation in listed] == [conversation_id]
         assert await conversation_repo.list_for_user(stranger_id) == []
+
+
+async def test_second_fresh_claim_is_busy(
+    migrated_db: None, session_factory: Any
+) -> None:
+    """Repository-level: only one claim can be held at a time."""
+    async with session_scope(session_factory) as session:
+        profile = await create_profile_row(session, telegram_id=9321)
+    user_id = profile.user_id
+    conversation_id = await create_conversation(session_factory, user_id)
+    now = datetime.now(UTC)
+    async with session_scope(session_factory) as session:
+        first = await TutorConversationRepository(session).try_claim(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            claim_id=uuid.uuid4(),
+            min_interval_seconds=0,
+            claim_timeout_seconds=199,
+            now=now,
+        )
+        assert first == "claimed"
+        second = await TutorConversationRepository(session).try_claim(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            claim_id=uuid.uuid4(),
+            min_interval_seconds=0,
+            claim_timeout_seconds=199,
+            now=now,
+        )
+        assert second == "busy"

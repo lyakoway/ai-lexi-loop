@@ -108,3 +108,37 @@ def test_extra_environment_variables_are_ignored(
     monkeypatch.setenv("SOME_UNRELATED_VAR", "42")
     settings: Any = Settings(_env_file=None)
     assert settings.testing is False
+
+
+# ---------------------------------------------------------------------------
+# Chat claim timeout (Stage 6.4)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_claim_timeout_defaults_to_calculated_budget() -> None:
+    settings = make_settings(llm_timeout_seconds=30, llm_retry_attempts=2)
+    assert settings.calculated_chat_claim_timeout_seconds == 199  # ceil(180*1.1)
+    assert settings.chat_claim_timeout_seconds == 199
+
+
+def test_chat_claim_timeout_recalculates_from_llm_settings() -> None:
+    settings = make_settings(llm_timeout_seconds=10, llm_retry_attempts=0)
+    assert settings.calculated_chat_claim_timeout_seconds == 22  # ceil(20*1.1)
+
+
+def test_chat_claim_timeout_accepts_manual_increase() -> None:
+    settings = make_settings(
+        llm_timeout_seconds=30,
+        llm_retry_attempts=2,
+        llm_chat_claim_timeout_seconds=500,
+    )
+    assert settings.chat_claim_timeout_seconds == 500
+
+
+def test_chat_claim_timeout_rejects_manual_value_below_budget() -> None:
+    with pytest.raises(ValidationError, match="must be at least"):
+        make_settings(
+            llm_timeout_seconds=30,
+            llm_retry_attempts=2,
+            llm_chat_claim_timeout_seconds=5,
+        )

@@ -1,5 +1,7 @@
 """AI tutor: orchestrated LLM scenarios (Stage 6+)."""
 
+from app.services.tutor.chat import ChatService, ChatUnavailable
+from app.services.tutor.chat_outputs import ChatReplyOut
 from app.services.tutor.generation import (
     AcceptResult,
     GenerationDraftSet,
@@ -19,6 +21,9 @@ __all__ = [
     "EXPLAIN_PROMPT_VERSION",
     "GENERATE_PROMPT_VERSION",
     "AcceptResult",
+    "ChatReplyOut",
+    "ChatService",
+    "ChatUnavailable",
     "ExplanationOut",
     "GeneratedSetOut",
     "GenerationDraftSet",
