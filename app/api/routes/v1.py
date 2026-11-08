@@ -7,17 +7,25 @@ one-to-one — no duplication.
 """
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     CurrentUserId,
+    GenerationDep,
     LessonDep,
     ProfileDep,
     ReviewDep,
     StatsDep,
+    TutorDep,
 )
 from app.db.models import Expression, Profile
 from app.schemas.api import (
+    AcceptIn,
+    AcceptOut,
     DueReviewsOut,
+    GeneratedDraftOut,
+    GeneratedOut,
+    GenerateIn,
     LessonCardOut,
     LessonOut,
     ProfileOut,
@@ -30,6 +38,11 @@ from app.schemas.profile import ProfileUpdate
 from app.services import ProfileNotConfiguredError
 from app.services.lessons import LessonPlan
 from app.services.reviews import ReviewUnavailable
+from app.services.tutor import (
+    GenerationUnavailable,
+    TutorExplanation,
+)
+from app.services.tutor.outputs import ExplanationOut
 
 router = APIRouter(prefix="/api/v1", tags=["api-v1"])
 
@@ -168,4 +181,106 @@ async def stats_progress(user_id: CurrentUserId, stats: StatsDep) -> StatsProgre
             }
             for day in progress
         ]
+    )
+
+
+@router.post(
+    "/expressions/{expression_id}/explain",
+    response_model=ExplanationOut,
+)
+async def explain_expression(
+    user_id: CurrentUserId,
+    expression_id: int,
+    tutor: TutorDep,
+) -> ExplanationOut | JSONResponse:
+    """AI explanation of one served expression, tuned to the profile.
+
+    Error paths return a JSONResponse directly so the tracked
+    tutor_explained event survives the request transaction.
+    """
+    result = await tutor.explain_expression(user_id, expression_id, source="web")
+    if isinstance(result, TutorExplanation):
+        return result.explanation
+    # Error paths return responses instead of raising: the tracked
+    # tutor_explained event shares the request transaction and would be
+    # rolled back by a raised HTTPException.
+    if result.reason in ("expression_not_found", "profile_not_found"):
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Expression not found"},
+        )
+    # llm_disabled / llm_error / invalid_output / input_too_large
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "AI features are unavailable right now"},
+    )
+
+
+@router.post("/tutor/expressions/generate", response_model=GeneratedOut)
+async def generate_expressions(
+    user_id: CurrentUserId,
+    request: GenerateIn,
+    generation: GenerationDep,
+) -> GeneratedOut | JSONResponse:
+    """Generate personal expression drafts for the user.
+
+    Drafts are private until accepted; identical candidates (in the
+    catalogue or among the user's drafts) are filtered out
+    deterministically.
+    """
+    result = await generation.generate_drafts(
+        user_id,
+        topic=request.topic,
+        count=request.count,
+        situation=request.situation,
+        source="web",
+    )
+    if isinstance(result, GenerationUnavailable):
+        if result.reason in ("profile_not_found",):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": "Profile not found"},
+            )
+        # input_too_large / llm_disabled / llm_error / invalid_output
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "AI features are unavailable right now",
+                "reason": result.reason,
+            },
+        )
+    return GeneratedOut(
+        drafts=[
+            GeneratedDraftOut(
+                draft_id=draft.id,
+                text=draft.text,
+                translation=draft.translation,
+                ipa=draft.ipa,
+                phonetic_hint_ru=draft.phonetic_hint_ru,
+                example=draft.example,
+                example_translation=draft.example_translation,
+                level=draft.level,
+                topic=draft.topic,
+            )
+            for draft in result.drafts
+        ],
+        duplicates_skipped=result.duplicates_skipped,
+    )
+
+
+@router.post("/tutor/expressions/accept", response_model=AcceptOut)
+async def accept_expressions(
+    user_id: CurrentUserId,
+    request: AcceptIn,
+    generation: GenerationDep,
+) -> AcceptOut:
+    """Accept the user's drafts: catalogue cards + SRS scheduling.
+
+    Only the caller's own drafts in ``draft`` status are processed;
+    unknown or already-processed ids are reported in ``skipped``.
+    """
+    result = await generation.accept_drafts(user_id, request.draft_ids, source="web")
+    return AcceptOut(
+        accepted_expression_ids=[card.id for card in result.accepted],
+        skipped_draft_ids=result.skipped_ids,
     )

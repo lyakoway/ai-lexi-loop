@@ -78,9 +78,12 @@ def test_middle_card_has_next_and_finish() -> None:
     assert "lssn~finish~42~0" in callbacks
 
 
-def test_last_card_has_only_finish() -> None:
+def test_last_card_has_finish_and_explain() -> None:
+    """The last card drops «next» but keeps finishing and explaining."""
     keyboard = lesson_card_keyboard(token=42, index=2, total=3)
     callbacks = [
-        button.callback_data for row in keyboard.inline_keyboard for button in row
+        button.callback_data or "" for row in keyboard.inline_keyboard for button in row
     ]
-    assert callbacks == ["lssn~finish~42~2"]
+    assert "lssn~finish~42~2" in callbacks
+    assert "lssn~next~42~2" not in callbacks
+    assert "tut~explain~42~2" in callbacks

@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     testing: bool = False
 
+    # LLM integration (Stage 6). Disabled by default: the product works
+    # fully without it; enabling requires an explicit, valid configuration.
+    llm_enabled: bool = False
+    llm_provider: Literal["openai_compatible"] = "openai_compatible"
+    llm_base_url: str = ""
+    llm_api_key: SecretStr = SecretStr("")
+    llm_model: str = ""
+    llm_timeout_seconds: float = 30.0
+    llm_retry_attempts: int = 2
+    llm_max_output_tokens: int = 1024
+
     @field_validator("log_level")
     @classmethod
     def _validate_log_level(cls, value: str) -> str:
@@ -44,6 +55,20 @@ class Settings(BaseSettings):
             raise ValueError(f"log_level must be one of {sorted(allowed)}")
         return normalized
 
+    @field_validator("llm_timeout_seconds")
+    @classmethod
+    def _validate_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("must be positive")
+        return value
+
+    @field_validator("llm_retry_attempts")
+    @classmethod
+    def _validate_not_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("must not be negative")
+        return value
+
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> "Settings":
         """Fail fast in production when a required secret is missing."""
@@ -52,6 +77,29 @@ class Settings(BaseSettings):
             and not self.telegram_bot_token.get_secret_value()
         ):
             raise ValueError("TELEGRAM_BOT_TOKEN is required in production")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_llm_settings(self) -> "Settings":
+        """An enabled LLM integration must be fully configured.
+
+        No silent fallback to a default endpoint or model: a broken
+        configuration surfaces at startup, not at first call time.
+        """
+        if self.llm_enabled:
+            missing = [
+                name
+                for name, value in (
+                    ("LLM_BASE_URL", self.llm_base_url),
+                    ("LLM_MODEL", self.llm_model),
+                    ("LLM_API_KEY", self.llm_api_key.get_secret_value()),
+                )
+                if not value
+            ]
+            if missing:
+                raise ValueError(
+                    f"LLM_ENABLED=true requires {', '.join(missing)} to be set"
+                )
         return self
 
     @property

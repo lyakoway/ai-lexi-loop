@@ -4,6 +4,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot import texts
+from app.bot.keyboards.tutor import explain_button
 
 
 class ReviewCB(CallbackData, prefix="rvw", sep="~"):
@@ -37,6 +38,7 @@ def review_card_keyboard(*, token: int, index: int) -> InlineKeyboardMarkup:
                         action="forgot", token=token, index=index
                     ).pack(),
                 ),
-            ]
+            ],
+            [explain_button(token=token, index=index)],
         ]
     )

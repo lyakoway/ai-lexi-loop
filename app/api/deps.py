@@ -15,12 +15,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionFactory, session_scope
+from app.integrations.llm.client import StructuredLlmClient
 from app.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
     ExpressionProgressRepository,
     ExpressionRepository,
     ProfileRepository,
+    UserGeneratedExpressionRepository,
     UserRepository,
 )
 from app.services import (
@@ -30,8 +32,10 @@ from app.services import (
     ProfileService,
     ReviewService,
     StatsService,
+    TutorService,
     UserService,
 )
+from app.services.tutor import GenerationService
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -113,6 +117,45 @@ def stats_service(session: SessionDep) -> StatsService:
     return StatsService(session, AnalyticsRepository(session))
 
 
+def get_llm_client(request: Request) -> StructuredLlmClient | None:
+    """The application-wide LLM client, or ``None`` when disabled."""
+    client: StructuredLlmClient | None = getattr(request.app.state, "llm_client", None)
+    return client
+
+
+LlmDep = Annotated[StructuredLlmClient | None, Depends(get_llm_client)]
+
+
+def tutor_service(
+    session: SessionDep,
+    llm_client: Annotated[StructuredLlmClient | None, Depends(get_llm_client)],
+) -> TutorService:
+    """TutorService with the app-wide LLM client (None = disabled)."""
+    from app.services.tutor import TutorService as _TutorService
+
+    return _TutorService(
+        profile_service(session),
+        ExpressionRepository(session),
+        ExpressionProgressRepository(session),
+        llm_client,
+        analytics_service(session),
+    )
+
+
+def generation_service(
+    session: SessionDep,
+    llm_client: Annotated[StructuredLlmClient | None, Depends(get_llm_client)],
+) -> GenerationService:
+    """GenerationService with the app-wide LLM client (None = disabled)."""
+    return GenerationService(
+        profile_service(session),
+        ExpressionRepository(session),
+        UserGeneratedExpressionRepository(session),
+        llm_client,
+        analytics_service(session),
+    )
+
+
 def user_service(session: SessionDep) -> UserService:
     return UserService(UserRepository(session), analytics_service(session))
 
@@ -122,4 +165,6 @@ ProfileDep = Annotated[ProfileService, Depends(profile_service)]
 LessonDep = Annotated[LessonService, Depends(lesson_service)]
 ReviewDep = Annotated[ReviewService, Depends(review_service)]
 StatsDep = Annotated[StatsService, Depends(stats_service)]
+TutorDep = Annotated[TutorService, Depends(tutor_service)]
+GenerationDep = Annotated[GenerationService, Depends(generation_service)]
 UserDep = Annotated[UserService, Depends(user_service)]

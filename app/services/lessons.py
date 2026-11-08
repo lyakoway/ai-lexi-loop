@@ -101,6 +101,7 @@ class LessonService:
             topics=topics,
             limit=profile.new_items_per_day,
             exclude_ids=served or None,
+            owner_user_id=user_id,
         )
         if candidates:
             lesson_ref = uuid.uuid4().hex[:12]
@@ -145,21 +146,31 @@ class LessonService:
                 lesson_ref=lesson_ref,
             )
 
-        reason = await self._diagnose_shortage(profile.target_language, level, topics)
+        reason = await self._diagnose_shortage(
+            profile.target_language, level, topics, user_id
+        )
         logger.info("no lesson for user_id=%s: %s", user_id, reason.reason)
         return reason
 
     async def _diagnose_shortage(
-        self, language: str, level: str, topics: list[str]
+        self, language: str, level: str, topics: list[str], user_id: int
     ) -> LessonUnavailable:
-        """Distinguish "nothing for topics" / "nothing at this level" / "all served"."""
+        """Distinguish "nothing for topics" / "nothing at this level" / "all served".
+
+        Uses the same visibility scope as the actual selection (shared
+        catalogue plus the user's personal cards), so the reported
+        reason always matches what the query could see.
+        """
         total_for_topics = await self._expressions.count_active(
-            language=language, topics=topics
+            language=language, topics=topics, owner_user_id=user_id
         )
         if total_for_topics == 0:
             return LessonUnavailable(reason="no_expressions_for_topics")
         at_level = await self._expressions.count_active(
-            language=language, topics=topics, level=level
+            language=language,
+            topics=topics,
+            level=level,
+            owner_user_id=user_id,
         )
         if at_level == 0:
             return LessonUnavailable(reason="no_expressions_for_level")

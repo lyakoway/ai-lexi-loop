@@ -222,6 +222,9 @@ async def seed_expressions(session: AsyncSession) -> int:
         return 0
     rows = [entry.model_dump(mode="json") for entry in SEED_EXPRESSIONS]
     statement = pg_insert(Expression).values(rows)
-    statement = statement.on_conflict_do_nothing(index_elements=["language", "text"])
+    # Target-less: the ownership split replaced the plain (language, text)
+    # constraint with partial functional indexes, so naming a target
+    # would be brittle.
+    statement = statement.on_conflict_do_nothing()
     result = await session.execute(statement)
     return int(getattr(result, "rowcount", 0) or 0)

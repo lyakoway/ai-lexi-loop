@@ -11,6 +11,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
@@ -25,6 +26,9 @@ from app.db.session import (
     build_engine,
     build_session_factory,
 )
+from app.integrations.llm import build_llm_client
+from app.integrations.llm.client import StructuredClient as StructuredClientType
+from app.integrations.llm.recorder import LlmCallRecorder
 from app.repositories import StorageError
 
 logger = logging.getLogger(__name__)
@@ -85,9 +89,27 @@ async def _lifespan(app: FastAPI, settings: Settings) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.session_factory = session_factory
 
+    llm_client: StructuredClientType | None = None
+    llm_http: httpx.AsyncClient | None = None
+    if settings.llm_enabled:
+        llm_http = httpx.AsyncClient()
+        llm_client = build_llm_client(
+            settings, llm_http, LlmCallRecorder(session_factory)
+        )
+        logger.info(
+            "llm integration enabled (provider=%s, model=%s)",
+            settings.llm_provider,
+            settings.llm_model,
+        )
+    else:
+        logger.info("llm integration disabled")
+    app.state.llm_client = llm_client
+
     bot_runner: BotRunner | None = None
     if settings.bot_enabled:
-        bot_runner = BotRunner(create_bot(settings), create_dispatcher(session_factory))
+        bot_runner = BotRunner(
+            create_bot(settings), create_dispatcher(session_factory, llm_client)
+        )
         await bot_runner.start()
     else:
         logger.info(
@@ -107,6 +129,9 @@ async def _lifespan(app: FastAPI, settings: Settings) -> AsyncIterator[None]:
     finally:
         if bot_runner is not None:
             await bot_runner.stop()
+        if llm_http is not None:
+            await llm_http.aclose()
+        app.state.llm_client = None
         await engine.dispose()
         app.state.engine = None
         logger.info("application stopped")

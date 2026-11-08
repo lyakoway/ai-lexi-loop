@@ -104,3 +104,48 @@ LessonUnavailableReason = Literal[
     "no_expressions_for_level",
     "all_served",
 ]
+
+
+class GenerateIn(BaseModel):
+    """Request of personal expression generation."""
+
+    topic: str = Field(min_length=1, max_length=64)
+    count: int = Field(default=5, ge=1, le=7)
+    situation: str = Field(default="", max_length=300)
+
+
+class GeneratedDraftOut(BaseModel):
+    """One draft awaiting the user's decision."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    draft_id: int
+    text: str
+    translation: str
+    ipa: str
+    phonetic_hint_ru: str
+    example: str
+    example_translation: str
+    level: str
+    topic: str
+
+
+class GeneratedOut(BaseModel):
+    """Generation result with the review set and dedup statistics."""
+
+    drafts: list[GeneratedDraftOut]
+    duplicates_skipped: int
+    unavailable_reason: str | None = None
+
+
+class AcceptIn(BaseModel):
+    """Draft ids to accept into learning."""
+
+    draft_ids: list[int] = Field(min_length=1, max_length=20)
+
+
+class AcceptOut(BaseModel):
+    """Acceptance result: catalogue cards now in the user's learning."""
+
+    accepted_expression_ids: list[int]
+    skipped_draft_ids: list[int]

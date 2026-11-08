@@ -82,7 +82,12 @@ async def test_builds_lesson_with_profile_filters() -> None:
     plan = await service.build_lesson(11, profile)
 
     expression_repository.get_active.assert_awaited_once_with(
-        language="en", level="B1", topics=["work"], limit=5, exclude_ids=None
+        language="en",
+        level="B1",
+        topics=["work"],
+        limit=5,
+        exclude_ids=None,
+        owner_user_id=11,
     )
     progress_repository.bulk_create.assert_awaited_once_with(11, [1, 2], now=ANY)
     assert isinstance(plan, LessonPlan)

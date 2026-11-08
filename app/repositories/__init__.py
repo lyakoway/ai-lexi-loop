@@ -4,6 +4,7 @@ from app.repositories.analytics import AnalyticsRepository
 from app.repositories.api_tokens import ApiTokenRepository
 from app.repositories.errors import StorageError, wrap_storage_errors
 from app.repositories.expressions import ExpressionRepository
+from app.repositories.generated import UserGeneratedExpressionRepository
 from app.repositories.profiles import ProfileRepository
 from app.repositories.progress import ExpressionProgressRepository
 from app.repositories.users import UserRepository
@@ -15,6 +16,7 @@ __all__ = [
     "ExpressionRepository",
     "ProfileRepository",
     "StorageError",
+    "UserGeneratedExpressionRepository",
     "UserRepository",
     "wrap_storage_errors",
 ]

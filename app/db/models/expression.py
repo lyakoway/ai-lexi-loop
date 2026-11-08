@@ -7,13 +7,14 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Identity,
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -34,18 +35,37 @@ class Expression(Base):
     a key of :class:`~app.domain.profile.Topic`; it is validated on write
     by Pydantic schemas rather than by a DB CHECK, so the topic catalogue
     can grow without a migration on every addition.
+
+    ``owner_user_id`` is ``None`` for shared catalogue entries (visible to
+    everyone) and set for personal cards created from a user's accepted
+    AI drafts (visible only to that user). Duplication rules are enforced
+    by PostgreSQL partial unique indexes: one card per
+    ``(language, lower(text))`` in the shared catalogue and per
+    ``(owner_user_id, language, lower(text))`` for personal cards — so
+    different users can own the same expression while nobody duplicates
+    a card, case-insensitively.
     """
 
     __tablename__ = "expressions"
     __table_args__ = (
-        UniqueConstraint(
-            "language",
-            "text",
-            name="uq_expressions_language_text",
-        ),
         CheckConstraint(
             "level IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')",
             name=ExpressionConstraintNames.LEVEL,
+        ),
+        Index(
+            "uq_expressions_shared_language_lower_text",
+            "language",
+            sa_text("lower(text)"),
+            unique=True,
+            postgresql_where=sa_text("owner_user_id IS NULL"),
+        ),
+        Index(
+            "uq_expressions_personal_owner_language_lower_text",
+            "owner_user_id",
+            "language",
+            sa_text("lower(text)"),
+            unique=True,
+            postgresql_where=sa_text("owner_user_id IS NOT NULL"),
         ),
         Index("ix_expressions_language_level", "language", "level"),
     )
@@ -54,6 +74,13 @@ class Expression(Base):
         BigInteger,
         Identity(always=True),
         primary_key=True,
+    )
+    # ``None`` = shared catalogue entry visible to everyone; a user id =
+    # a personal card created from that user's accepted AI draft.
+    owner_user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
     )
     language: Mapped[str] = mapped_column(String(8), nullable=False)
     text: Mapped[str] = mapped_column(String(128), nullable=False)

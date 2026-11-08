@@ -4,6 +4,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot import texts
+from app.bot.keyboards.tutor import explain_button
 
 
 class LessonCB(CallbackData, prefix="lssn", sep="~"):
@@ -34,4 +35,5 @@ def lesson_card_keyboard(*, token: int, index: int, total: int) -> InlineKeyboar
         callback_data=LessonCB(action="finish", token=token, index=index).pack(),
     )
     rows = [[finish_button]] if index >= total - 1 else [[next_button], [finish_button]]
+    rows.append([explain_button(token=token, index=index)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

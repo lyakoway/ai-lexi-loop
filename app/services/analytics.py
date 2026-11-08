@@ -31,6 +31,9 @@ EXPRESSION_COMPLETED = "expression_completed"
 REVIEW_STARTED = "review_started"
 REVIEW_ANSWERED = "review_answered"
 REVIEW_COMPLETED = "review_completed"
+TUTOR_EXPLAINED = "tutor_explained"
+TUTOR_GENERATED = "tutor_generated"
+TUTOR_ACCEPTED = "tutor_accepted"
 
 #: Fields that must never appear in event properties.
 FORBIDDEN_PROPERTY_KEYS = frozenset(

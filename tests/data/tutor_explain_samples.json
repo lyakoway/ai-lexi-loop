@@ -1,0 +1,85 @@
+{
+  "prompt_version": "explain_v1",
+  "description": "Seed samples for the future evaluation contour (Stage 6.5). Each case: card context plus a hand-checked reference answer that must validate against ExplanationOut.",
+  "cases": [
+    {
+      "name": "idiom_break_a_leg",
+      "context": {
+        "expression": "Break a leg!",
+        "known_translation": "Ни пуха ни пера!",
+        "example": "You have an exam tomorrow? Break a leg!",
+        "example_translation": "Завтра экзамен? Ни пуха ни пера!",
+        "topic": "everyday",
+        "level": "A2",
+        "native_language": "ru",
+        "target_language": "en"
+      },
+      "expected": {
+        "meaning": "Пожелание удачи (идиома).",
+        "explanation": "Так желают удачи перед выступлением или экзаменом. Дословный перевод не имеет смысла — это театральное суеверие.",
+        "usage_notes": ["Неформальная речь", "Только как пожелание удачи"],
+        "common_mistakes": ["Понимают буквально и пугаются"],
+        "examples": [
+          {"text": "Break a leg at your interview!", "translation": "Удачи на собеседовании!"}
+        ],
+        "mini_dialogue": {
+          "lines": [
+            {"text": "I'm so nervous about the show.", "translation": "Я так нервничаю перед концертом."},
+            {"text": "Break a leg!", "translation": "Удачи!"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "phrase_good_morning",
+      "context": {
+        "expression": "Good morning!",
+        "known_translation": "Доброе утро!",
+        "example": "Good morning! Did you sleep well?",
+        "example_translation": "Доброе утро! Ты хорошо спал?",
+        "topic": "everyday",
+        "level": "A1",
+        "native_language": "ru",
+        "target_language": "en"
+      },
+      "expected": {
+        "meaning": "Приветствие утром, примерно до полудня.",
+        "explanation": "Стандартное вежливое приветствие в первой половине дня.",
+        "usage_notes": ["Подходит для любого собеседника"],
+        "common_mistakes": ["Говорят после полудня, когда уместно Good afternoon"],
+        "examples": [
+          {"text": "Good morning, everyone!", "translation": "Доброе утро всем!"}
+        ],
+        "mini_dialogue": null
+      }
+    },
+    {
+      "name": "phrasal_keep_me_posted",
+      "context": {
+        "expression": "Keep me posted",
+        "known_translation": "Держи меня в курсе",
+        "example": "Keep me posted about the results.",
+        "example_translation": "Держи меня в курсе результатов.",
+        "topic": "work",
+        "level": "B1",
+        "native_language": "ru",
+        "target_language": "en"
+      },
+      "expected": {
+        "meaning": "Просьба сообщать о новостях по мере поступления.",
+        "explanation": "Нейтрально-деловая фраза: попросить информировать о развитии ситуации.",
+        "usage_notes": ["Часто в рабочей переписке"],
+        "common_mistakes": ["Путают с keep me updated в формальных письмах — оба верны, но регистр чуть разный"],
+        "examples": [
+          {"text": "Keep me posted on the schedule changes.", "translation": "Держи меня в курсе изменений расписания."}
+        ],
+        "mini_dialogue": {
+          "lines": [
+            {"text": "We're still deciding on the venue.", "translation": "Мы ещё выбираем место."},
+            {"text": "OK, keep me posted.", "translation": "Ладно, держи меня в курсе."}
+          ]
+        }
+      }
+    }
+  ]
+}

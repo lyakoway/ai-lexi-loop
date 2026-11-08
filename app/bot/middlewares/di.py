@@ -15,12 +15,14 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from app.db.session import SessionFactory, session_scope
+from app.integrations.llm.client import StructuredLlmClient
 from app.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
     ExpressionProgressRepository,
     ExpressionRepository,
     ProfileRepository,
+    UserGeneratedExpressionRepository,
     UserRepository,
 )
 from app.services import (
@@ -30,15 +32,22 @@ from app.services import (
     ProfileService,
     ReviewService,
     StatsService,
+    TutorService,
     UserService,
 )
+from app.services.tutor import GenerationService
 
 
 class DbSessionMiddleware(BaseMiddleware):
-    """Provide per-update session and application services."""
+    """Provide per-update session, application services and the LLM client."""
 
-    def __init__(self, session_factory: SessionFactory) -> None:
+    def __init__(
+        self,
+        session_factory: SessionFactory,
+        llm_client: StructuredLlmClient | None = None,
+    ) -> None:
         self._session_factory = session_factory
+        self._llm_client = llm_client
 
     async def __call__(
         self,
@@ -62,5 +71,20 @@ class DbSessionMiddleware(BaseMiddleware):
                 progress_repository, expression_repository, analytics
             )
             data["stats_service"] = StatsService(session, AnalyticsRepository(session))
+            data["generation_service"] = GenerationService(
+                data["profile_service"],
+                expression_repository,
+                UserGeneratedExpressionRepository(session),
+                self._llm_client,
+                analytics,
+            )
             data["token_service"] = ApiTokenService(ApiTokenRepository(session))
+            data["tutor_service"] = TutorService(
+                data["profile_service"],
+                expression_repository,
+                progress_repository,
+                self._llm_client,
+                analytics,
+            )
+            data["llm_client"] = self._llm_client
             return await handler(event, data)

@@ -14,12 +14,14 @@ from app.services.reviews import (
 )
 from app.services.stats import StatsService
 from app.services.tokens import ApiTokenService, TokenLimitError
+from app.services.tutor import GenerationService, TutorService
 from app.services.users import UserService
 
 __all__ = [
     "AnalyticsService",
     "ApiTokenService",
     "EventSource",
+    "GenerationService",
     "LessonPlan",
     "LessonService",
     "LessonUnavailable",
@@ -30,5 +32,6 @@ __all__ = [
     "ReviewUnavailable",
     "StatsService",
     "TokenLimitError",
+    "TutorService",
     "UserService",
 ]
