@@ -6,22 +6,30 @@ user_id-scoped queries. Business logic is shared with Telegram handlers
 one-to-one — no duplication.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import (
+    ChatDep,
     CurrentUserId,
     GenerationDep,
+    IdempotencyKeyDep,
     LessonDep,
     ProfileDep,
     ReviewDep,
     StatsDep,
     TutorDep,
 )
-from app.db.models import Expression, Profile
+from app.db.models import Expression, Profile, TutorConversation, TutorMessage
 from app.schemas.api import (
     AcceptIn,
     AcceptOut,
+    ChatConversationOut,
+    ChatHistoryOut,
+    ChatMessageIn,
+    ChatMessageOut,
+    ChatSendOut,
+    ChatStartIn,
     DueReviewsOut,
     GeneratedDraftOut,
     GeneratedOut,
@@ -39,6 +47,7 @@ from app.services import ProfileNotConfiguredError
 from app.services.lessons import LessonPlan
 from app.services.reviews import ReviewUnavailable
 from app.services.tutor import (
+    ChatUnavailable,
     GenerationUnavailable,
     TutorExplanation,
 )
@@ -284,3 +293,220 @@ async def accept_expressions(
         accepted_expression_ids=[card.id for card in result.accepted],
         skipped_draft_ids=result.skipped_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# AI Tutor Chat (Stage 6.4.3)
+# ---------------------------------------------------------------------------
+
+
+def _chat_conversation_out(conversation: TutorConversation) -> ChatConversationOut:
+    return ChatConversationOut(
+        id=conversation.id,
+        language=conversation.language,
+        native_language=conversation.native_language,
+        level=conversation.level,
+        topic=conversation.topic,
+        situation=conversation.situation,
+        status=conversation.status,
+        message_count=conversation.message_count,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        closed_at=conversation.closed_at,
+    )
+
+
+def _chat_message_out(message: TutorMessage) -> ChatMessageOut:
+    return ChatMessageOut(
+        id=message.id,
+        conversation_id=message.conversation_id,
+        role=message.role,
+        text=message.text,
+        client_request_id=message.client_request_id,
+        in_reply_to_message_id=message.in_reply_to_message_id,
+        created_at=message.created_at,
+    )
+
+
+def _chat_error(reason: str) -> JSONResponse:
+    """Map a ChatService reason to an HTTP response (typed, no internals)."""
+    status_code = _CHAT_REASON_STATUS.get(reason, 503)
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": reason},
+    )
+
+
+_CHAT_REASON_STATUS: dict[str, int] = {
+    "profile_not_found": 404,
+    "conversation_not_found": 404,
+    "conversation_closed": 409,
+    "busy": 409,
+    "rate_limited": 429,
+    "claim_lost": 409,
+    "message_too_long": 422,
+    "idempotency_conflict": 409,
+    "idempotency_pending": 409,
+    "llm_disabled": 503,
+    "llm_error": 503,
+    "invalid_output": 503,
+}
+
+
+@router.post("/tutor/chat", response_model=ChatConversationOut)
+async def start_tutor_chat(
+    user_id: CurrentUserId,
+    chats: ChatDep,
+    start: ChatStartIn | None = None,
+) -> ChatConversationOut | JSONResponse:
+    """Create or resume the caller's active tutor chat dialog.
+
+    Languages and CEFR level come from the authenticated user's profile.
+    Never creates a second active dialog.
+    """
+    payload = start or ChatStartIn()
+    conversation = await chats.start_chat(
+        user_id,
+        topic=payload.topic,
+        situation=payload.situation,
+        source="web",
+    )
+    if isinstance(conversation, ChatUnavailable):
+        # profile_not_found
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Profile not found"},
+        )
+    # Create-or-get semantics: 200 for both a new and a resumed dialog.
+    return _chat_conversation_out(conversation)
+
+
+@router.get("/tutor/chat", response_model=list[ChatConversationOut])
+async def list_tutor_chats(
+    user_id: CurrentUserId, chats: ChatDep
+) -> list[ChatConversationOut]:
+    """All tutor chat dialogs of the caller, newest first."""
+    conversations = await chats.list_chats(user_id)
+    return [_chat_conversation_out(conversation) for conversation in conversations]
+
+
+@router.get("/tutor/chat/active", response_model=ChatConversationOut)
+async def get_active_tutor_chat(
+    user_id: CurrentUserId, chats: ChatDep
+) -> ChatConversationOut:
+    """The caller's active tutor chat dialog, or 404."""
+    conversation = await chats.get_active_chat(user_id)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active tutor chat dialog",
+        )
+    return _chat_conversation_out(conversation)
+
+
+@router.get(
+    "/tutor/chat/{conversation_id}/messages",
+    response_model=ChatHistoryOut,
+)
+async def get_tutor_chat_history(
+    user_id: CurrentUserId,
+    conversation_id: int,
+    chats: ChatDep,
+) -> ChatHistoryOut:
+    """Messages of the caller's dialog, chronological; foreign/missing → 404."""
+    conversation = await chats.get_chat(user_id, conversation_id)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tutor chat dialog not found",
+        )
+    messages = await chats.get_history(user_id, conversation_id)
+    return ChatHistoryOut(
+        conversation_id=conversation_id,
+        messages=[_chat_message_out(message) for message in messages],
+    )
+
+
+@router.post(
+    "/tutor/chat/{conversation_id}/messages",
+    response_model=ChatSendOut,
+)
+async def send_tutor_chat_message(
+    user_id: CurrentUserId,
+    conversation_id: int,
+    message: ChatMessageIn,
+    chats: ChatDep,
+    idempotency_key: IdempotencyKeyDep,
+    response: Response,
+) -> ChatSendOut | JSONResponse:
+    """Send one message to the caller's active dialog.
+
+    Requires an ``Idempotency-Key`` header; a replay returns the saved
+    reply without a new LLM call and sets ``Idempotent-Replay: true``.
+    """
+    result = await chats.send_message(
+        user_id,
+        conversation_id,
+        message.text,
+        client_request_id=idempotency_key,
+        source="web",
+    )
+    if isinstance(result, ChatUnavailable):
+        return _chat_error(result.reason)
+
+    user_out = _chat_message_out(result.user_message)
+    assistant_out = (
+        _chat_message_out(result.assistant_message)
+        if result.assistant_message is not None
+        else None
+    )
+    if result.replay:
+        response.headers["Idempotent-Replay"] = "true"
+    return ChatSendOut(
+        user_message=user_out,
+        assistant_message=assistant_out,
+        reply=result.reply,
+        conversation_status="closed" if result.closed else "active",
+    )
+
+
+@router.post(
+    "/tutor/chat/{conversation_id}/close",
+    response_model=None,
+)
+async def close_tutor_chat(
+    user_id: CurrentUserId,
+    conversation_id: int,
+    chats: ChatDep,
+) -> dict[str, str] | JSONResponse:
+    """Close the caller's active dialog; foreign/missing → 404, already
+    closed → 409."""
+    conversation = await chats.get_chat(user_id, conversation_id)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tutor chat dialog not found",
+        )
+    if conversation.status != "active":
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": "Dialog is already closed"},
+        )
+    await chats.close_chat(user_id, conversation_id)
+    return {"status": "closed"}
+
+
+@router.delete("/tutor/chat/{conversation_id}")
+async def delete_tutor_chat(
+    user_id: CurrentUserId,
+    conversation_id: int,
+    chats: ChatDep,
+) -> dict[str, str]:
+    """Delete the caller's dialog with its messages; foreign/missing → 404."""
+    deleted = await chats.delete_chat(user_id, conversation_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tutor chat dialog not found",
+        )
+    return {"status": "deleted"}

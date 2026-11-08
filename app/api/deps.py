@@ -7,13 +7,15 @@ mechanism, not this verification path. A Telegram ID sent by a client
 proves nothing and is never used for authentication.
 """
 
+import re
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.session import SessionFactory, session_scope
 from app.integrations.llm.client import StructuredLlmClient
 from app.repositories import (
@@ -35,7 +37,7 @@ from app.services import (
     TutorService,
     UserService,
 )
-from app.services.tutor import GenerationService
+from app.services.tutor import ChatService, GenerationService
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -160,6 +162,32 @@ def user_service(session: SessionDep) -> UserService:
     return UserService(UserRepository(session), analytics_service(session))
 
 
+def chat_service(
+    session_factory: Annotated[SessionFactory, Depends(get_session_factory)],
+    llm_client: LlmDep,
+) -> ChatService:
+    """ChatService sharing the app-wide LLM client (None = disabled)."""
+    return ChatService(session_factory, llm_client, get_settings())
+
+
+_IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+async def get_idempotency_key(
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+) -> str:
+    """Validate the Idempotency-Key header before service/LLM work."""
+    if not _IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Idempotency-Key must be 8-64 characters of A-Z, a-z, "
+                "digits, underscore or hyphen"
+            ),
+        )
+    return idempotency_key
+
+
 AnalyticsDep = Annotated[AnalyticsService, Depends(analytics_service)]
 ProfileDep = Annotated[ProfileService, Depends(profile_service)]
 LessonDep = Annotated[LessonService, Depends(lesson_service)]
@@ -167,4 +195,6 @@ ReviewDep = Annotated[ReviewService, Depends(review_service)]
 StatsDep = Annotated[StatsService, Depends(stats_service)]
 TutorDep = Annotated[TutorService, Depends(tutor_service)]
 GenerationDep = Annotated[GenerationService, Depends(generation_service)]
+ChatDep = Annotated[ChatService, Depends(chat_service)]
+IdempotencyKeyDep = Annotated[str, Depends(get_idempotency_key)]
 UserDep = Annotated[UserService, Depends(user_service)]

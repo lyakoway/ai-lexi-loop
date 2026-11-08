@@ -5,9 +5,11 @@ its own views, Web renders these.
 """
 
 from datetime import date, datetime, time
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+from app.services.tutor.chat_outputs import ChatReplyOut
 
 
 class ProfileOut(BaseModel):
@@ -149,3 +151,78 @@ class AcceptOut(BaseModel):
 
     accepted_expression_ids: list[int]
     skipped_draft_ids: list[int]
+
+
+class ChatConversationOut(BaseModel):
+    """A tutor chat dialog as visible to its owner.
+
+    Internal claim columns (generation_started_at / generation_claim_id /
+    last_generation_at) are deliberately excluded: they are scheduling
+    internals, not user-facing data.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    language: str
+    native_language: str
+    level: str
+    topic: str | None
+    situation: str | None
+    status: str
+    message_count: int
+    created_at: datetime
+    updated_at: datetime
+    closed_at: datetime | None
+
+
+class ChatMessageOut(BaseModel):
+    """One tutor chat message.
+
+    ``in_reply_to_message_id`` preserves the assistant → user link;
+    ``client_request_id`` echoes the caller's Idempotency-Key for user
+    messages. Internal fields (prompt_version, error_kind) are excluded.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    conversation_id: int
+    role: Literal["user", "assistant"]
+    text: str
+    client_request_id: str | None
+    in_reply_to_message_id: int | None
+    created_at: datetime
+
+
+class ChatHistoryOut(BaseModel):
+    """Messages of one dialog, chronological (oldest first)."""
+
+    conversation_id: int
+    messages: list[ChatMessageOut]
+
+
+class ChatSendOut(BaseModel):
+    """Result of sending one message: the saved pair and the reply."""
+
+    user_message: ChatMessageOut
+    assistant_message: ChatMessageOut
+    reply: ChatReplyOut
+    conversation_status: Literal["active", "closed"]
+
+
+class ChatStartIn(BaseModel):
+    """Optional parameters when starting a tutor chat dialog."""
+
+    topic: Annotated[str, StringConstraints(strip_whitespace=True, max_length=32)] = ""
+    situation: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=300)
+    ] = ""
+
+
+class ChatMessageIn(BaseModel):
+    """One user message for the tutor chat (validated before the LLM)."""
+
+    text: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)
+    ]

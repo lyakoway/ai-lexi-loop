@@ -378,6 +378,22 @@ class ChatService:
             replay=True,
         )
 
+    async def get_chat(
+        self, user_id: int, conversation_id: int
+    ) -> TutorConversation | None:
+        """The user's conversation by id; None for foreign/missing ids."""
+        async with session_scope(self._session_factory) as session:
+            return await TutorConversationRepository(session).get_for_user(
+                user_id=user_id, conversation_id=conversation_id
+            )
+
+    async def get_active_chat(self, user_id: int) -> TutorConversation | None:
+        """The user's active chat dialog; None if there is none."""
+        async with session_scope(self._session_factory) as session:
+            return await TutorConversationRepository(session).get_active_for_user(
+                user_id
+            )
+
     async def close_chat(self, user_id: int, conversation_id: int) -> bool:
         """Close the user's active dialog; False for foreign/missing."""
         async with session_scope(self._session_factory) as session:
