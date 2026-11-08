@@ -2,6 +2,7 @@
 
 from app.db.models.analytics import AnalyticsEvent
 from app.db.models.api_token import ApiToken
+from app.db.models.chat import TutorConversation, TutorMessage
 from app.db.models.expression import Expression
 from app.db.models.generated import UserGeneratedExpression
 from app.db.models.identity import UserIdentity
@@ -17,6 +18,8 @@ __all__ = [
     "ExpressionProgress",
     "LlmCall",
     "Profile",
+    "TutorConversation",
+    "TutorMessage",
     "User",
     "UserGeneratedExpression",
     "UserIdentity",
