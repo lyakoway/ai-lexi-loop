@@ -14,6 +14,7 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from app.core.config import get_settings
 from app.db.session import SessionFactory, session_scope
 from app.integrations.llm.client import StructuredLlmClient
 from app.repositories import (
@@ -28,6 +29,7 @@ from app.repositories import (
 from app.services import (
     AnalyticsService,
     ApiTokenService,
+    ChatService,
     LessonService,
     ProfileService,
     ReviewService,
@@ -57,6 +59,9 @@ class DbSessionMiddleware(BaseMiddleware):
     ) -> Any:
         async with session_scope(self._session_factory) as session:
             analytics = AnalyticsService(AnalyticsRepository(session))
+            # Deterministic idempotency key source for chat messages.
+            update_id = getattr(event, "update_id", None)
+            data["tg_update_id"] = update_id
             data["session"] = session
             data["user_service"] = UserService(UserRepository(session), analytics)
             data["profile_service"] = ProfileService(
@@ -77,6 +82,9 @@ class DbSessionMiddleware(BaseMiddleware):
                 UserGeneratedExpressionRepository(session),
                 self._llm_client,
                 analytics,
+            )
+            data["chat_service"] = ChatService(
+                self._session_factory, self._llm_client, get_settings()
             )
             data["token_service"] = ApiTokenService(ApiTokenRepository(session))
             data["tutor_service"] = TutorService(

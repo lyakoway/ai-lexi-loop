@@ -414,12 +414,21 @@ class ChatService:
             return await TutorConversationRepository(session).list_for_user(user_id)
 
     async def get_history(
-        self, user_id: int, conversation_id: int
+        self,
+        user_id: int,
+        conversation_id: int,
+        *,
+        limit: int | None = None,
     ) -> list[TutorMessage]:
-        """Messages of the user's dialog, chronological."""
+        """Messages of the user's dialog, chronological.
+
+        ``limit`` keeps only the last N messages (still chronological).
+        """
         async with session_scope(self._session_factory) as session:
             return await TutorMessageRepository(session).list_for_conversation(
-                user_id=user_id, conversation_id=conversation_id
+                user_id=user_id,
+                conversation_id=conversation_id,
+                limit=limit,
             )
 
     async def _release(

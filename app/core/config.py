@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = 1024
     # AI Tutor Chat (Stage 6.4).
     llm_chat_min_interval_seconds: float = 3.0
+    chat_history_last_n: int = 10
     # None → calculated from the full LlmClient budget (initial + repair
     # attempts); a manual value below that budget is rejected at startup.
     llm_chat_claim_timeout_seconds: int | None = None
@@ -79,6 +80,13 @@ class Settings(BaseSettings):
     def _validate_interval_not_negative(cls, value: float) -> float:
         if value < 0:
             raise ValueError("must not be negative")
+        return value
+
+    @field_validator("chat_history_last_n")
+    @classmethod
+    def _validate_history_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("must be at least 1")
         return value
 
     @model_validator(mode="after")

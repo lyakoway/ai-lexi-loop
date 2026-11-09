@@ -381,3 +381,53 @@ GEN_UNAVAILABLE = (
     "Не удалось сгенерировать выражения — попробуйте позже. "
     "Обучение продолжается без изменений."
 )
+
+# ---------------------------------------------------------------------------
+# AI Tutor Chat (/chat, /close, /history)
+# ---------------------------------------------------------------------------
+
+BTN_OPEN_CHAT = "💬 Практика с тьютором"
+CHAT_STARTED = (
+    "💬 Режим практики включён.\n"
+    "Пишите сообщения на изучаемом языке — я отвечу, мягко поправлю "
+    "ошибки и подскажу естественные формулировки.\n\n"
+    "Тема: {topic}. /close — завершить, /history — последние сообщения."
+)
+CHAT_RESUMED = "💬 Продолжаем диалог ({count} сообщений). Пишите!"
+CHAT_REPLY_PREFIX = "🤖"
+CHAT_CORRECTION_TITLE = "🛠 <b>Как точнее:</b>"
+CHAT_CORRECTION_NOTE_TITLE = "📝"
+CHAT_ALTERNATIVE_TITLE = "💡 <b>Естественнее:</b>"
+CHAT_FOLLOWUP_TITLE = "❓"
+CHAT_NON_TEXT = "Напишите сообщение текстом 🙂"
+CHAT_MESSAGE_TOO_LONG = "Сообщение слишком длинное (до 1000 символов) — разделите его."
+CHAT_BUSY = "Тьютор отвечает на предыдущее сообщение — секундочку и повторите."
+CHAT_RATE_LIMITED = "Слишком часто — подождите пару секунд."
+CHAT_CLAIM_LOST = "Не сохранилось — отправьте сообщение ещё раз."
+CHAT_UNAVAILABLE = (
+    "AI тьютор временно недоступен — попробуйте позже. "
+    "Обучение продолжается: /lesson, /review."
+)
+CHAT_CLOSED = "💬 Диалог закрыт. /chat — начать новый."
+CHAT_NOT_FOUND = "Активного диалога нет — начните: /chat"
+CHAT_HISTORY_EMPTY = "Пока нет сообщений — напишите первое в /chat."
+CHAT_HISTORY_TITLE = "<b>💬 Последние сообщения</b>"
+
+# Map of ChatService reason -> user-facing text (no internal codes).
+# The chat handler renders strictly from this dict: if a reason is not
+# here, the user gets the generic "unavailable" text — and the
+# parametrized test fails on any reason leaking into the answer.
+CHAT_ERROR_TEXTS: dict[str, str] = {
+    "busy": CHAT_BUSY,
+    "rate_limited": CHAT_RATE_LIMITED,
+    "claim_lost": CHAT_CLAIM_LOST,
+    "message_too_long": CHAT_MESSAGE_TOO_LONG,
+    "conversation_closed": CHAT_CLOSED,
+    "conversation_not_found": CHAT_NOT_FOUND,
+    "profile_not_found": CHAT_NOT_FOUND,
+    "llm_disabled": CHAT_UNAVAILABLE,
+    "llm_error": CHAT_UNAVAILABLE,
+    "invalid_output": CHAT_UNAVAILABLE,
+    "idempotency_conflict": CHAT_BUSY,
+    "idempotency_pending": CHAT_CLAIM_LOST,
+}

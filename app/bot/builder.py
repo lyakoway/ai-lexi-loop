@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
+from app.bot.handlers import chat as chat_handlers
 from app.bot.handlers import generate as generate_handlers
 from app.bot.handlers import help as help_handlers
 from app.bot.handlers import lesson as lesson_handlers
@@ -47,6 +48,7 @@ def create_dispatcher(
     dispatcher.update.outer_middleware(DbSessionMiddleware(session_factory, llm_client))
     dispatcher.include_router(start_handlers.router)
     dispatcher.include_router(help_handlers.router)
+    dispatcher.include_router(chat_handlers.router)
     dispatcher.include_router(stats_token_handlers.router)
     dispatcher.include_router(generate_handlers.router)
     dispatcher.include_router(navigation_handlers.router)

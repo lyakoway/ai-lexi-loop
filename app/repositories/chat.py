@@ -260,14 +260,19 @@ class TutorMessageRepository:
             return message
 
     async def list_for_conversation(
-        self, *, user_id: int, conversation_id: int
+        self,
+        *,
+        user_id: int,
+        conversation_id: int,
+        limit: int | None = None,
     ) -> list[TutorMessage]:
         """History of an owned conversation in chronological order.
 
         Ownership is enforced through a join with the conversation.
+        ``limit`` keeps only the last N messages (order preserved).
         """
         async with wrap_storage_errors():
-            result = await self._session.execute(
+            query = (
                 select(TutorMessage)
                 .join(
                     TutorConversation,
@@ -277,7 +282,18 @@ class TutorMessageRepository:
                     TutorMessage.conversation_id == conversation_id,
                     TutorConversation.user_id == user_id,
                 )
-                .order_by(TutorMessage.created_at, TutorMessage.id)
+            )
+            if limit is not None:
+                newest = await self._session.execute(
+                    query.order_by(
+                        TutorMessage.created_at.desc(), TutorMessage.id.desc()
+                    ).limit(limit)
+                )
+                messages = list(newest.scalars().all())
+                messages.reverse()
+                return messages
+            result = await self._session.execute(
+                query.order_by(TutorMessage.created_at, TutorMessage.id)
             )
             return list(result.scalars().all())
 
