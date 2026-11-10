@@ -14,6 +14,7 @@ from app.bot.handlers import help as help_handlers
 from app.bot.handlers import lesson as lesson_handlers
 from app.bot.handlers import navigation as navigation_handlers
 from app.bot.handlers import onboarding as onboarding_handlers
+from app.bot.handlers import quiz as quiz_handlers
 from app.bot.handlers import review as review_handlers
 from app.bot.handlers import settings as settings_handlers
 from app.bot.handlers import start as start_handlers
@@ -53,6 +54,7 @@ def create_dispatcher(
     dispatcher.include_router(help_handlers.router)
     dispatcher.include_router(chat_handlers.router)
     dispatcher.include_router(tts_handlers.router)
+    dispatcher.include_router(quiz_handlers.router)
     dispatcher.include_router(stats_token_handlers.router)
     dispatcher.include_router(generate_handlers.router)
     dispatcher.include_router(navigation_handlers.router)

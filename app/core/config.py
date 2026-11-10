@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     chat_history_last_n: int = 10
     # Russian hint fades after N weeks unless the word is difficult.
     phonetic_hint_fade_weeks: int = 8
+    # Active recall quiz (Stage 6.4.6). A CEFR promotion needs N correct
+    # quiz answers in a row plus the user's explicit confirmation; the
+    # "top forgotten" report may be shown at most once per interval.
+    quiz_level_streak_needed: int = 3
+    forgotten_report_interval_days: int = 7
     # TTS (Stage 6.4.5). Disabled by default; graceful degradation.
     tts_enabled: bool = False
     tts_provider: Literal["openai_compatible"] = "openai_compatible"
@@ -85,6 +90,13 @@ class Settings(BaseSettings):
     def _validate_not_negative(cls, value: int) -> int:
         if value < 0:
             raise ValueError("must not be negative")
+        return value
+
+    @field_validator("quiz_level_streak_needed", "forgotten_report_interval_days")
+    @classmethod
+    def _validate_quiz_settings(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("must be at least 1")
         return value
 
     @field_validator("llm_chat_min_interval_seconds")

@@ -22,6 +22,32 @@ class Level(StrEnum):
     C2 = "C2"
 
 
+#: Concrete CEFR levels in learning order (``UNKNOWN`` is not learnable).
+LEVEL_ORDER: tuple[str, ...] = (
+    Level.A1,
+    Level.A2,
+    Level.B1,
+    Level.B2,
+    Level.C1,
+    Level.C2,
+)
+
+
+def next_level(level: str) -> str | None:
+    """The next CEFR level after ``level``, or ``None`` at the top.
+
+    ``UNKNOWN`` (self-estimate not given) promotes to A1: the first quiz
+    results give the algorithm better information than the empty estimate.
+    """
+    try:
+        index = LEVEL_ORDER.index(level)
+    except ValueError:
+        return Level.A1
+    if index + 1 >= len(LEVEL_ORDER):
+        return None
+    return LEVEL_ORDER[index + 1]
+
+
 class LearningGoal(StrEnum):
     """Why the user is learning the language."""
 

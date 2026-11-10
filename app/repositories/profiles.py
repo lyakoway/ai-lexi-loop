@@ -1,5 +1,7 @@
 """Repository for the ``profiles`` table."""
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,3 +63,26 @@ class ProfileRepository:
             await self._session.flush()
             await self._session.refresh(profile)
             return profile
+
+    async def set_quiz_streak(self, profile: Profile, streak: int) -> None:
+        """Persist the consecutive-correct-quiz counter."""
+        async with wrap_storage_errors():
+            profile.quiz_success_streak = streak
+            await self._session.flush()
+
+    async def promote_level(self, profile: Profile, new_level: str) -> Profile:
+        """Write the confirmed CEFR promotion and reset the quiz streak."""
+        async with wrap_storage_errors():
+            profile.level = new_level
+            profile.quiz_success_streak = 0
+            await self._session.flush()
+            await self._session.refresh(profile)
+            return profile
+
+    async def set_last_forgotten_report_at(
+        self, profile: Profile, sent_at: datetime
+    ) -> None:
+        """Stamp the weekly "top forgotten" report throttle."""
+        async with wrap_storage_errors():
+            profile.last_forgotten_report_at = sent_at
+            await self._session.flush()

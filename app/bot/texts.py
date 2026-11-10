@@ -439,3 +439,72 @@ CHAT_ERROR_TEXTS: dict[str, str] = {
 
 TTS_UNAVAILABLE = "Озвучка временно недоступна."
 TTS_VOICE_CAPTION = "🔊 {text}"
+
+# ---------------------------------------------------------------------------
+# Active recall quiz (Stage 6.4.6)
+# ---------------------------------------------------------------------------
+
+BTN_OPEN_QUIZ = "🎯 Квиз"
+QUIZ_PREFIX = "🎯 <b>Квиз</b>"
+QUIZ_QUESTION = (
+    QUIZ_PREFIX + "\n\nКак будет по-английски:\n«{question}»?\n\n"
+    "Напишите ответ свободной формой — смысл важнее точной формулировки. "
+    "/quiz — другой вопрос."
+)
+QUIZ_CORRECT = "✅ <b>Верно!</b>"
+QUIZ_WRONG = "❌ <b>Не совсем.</b>"
+QUIZ_CORRECTED_TITLE = "Правильный ответ:"
+QUIZ_EXPLANATION_TITLE = "💬 {explanation}"
+QUIZ_NEXT_REVIEW = "⏰ Следующее повторение: {date}"
+QUIZ_EVALUATION_RETRY = (
+    "Не смог оценить ответ — попробуйте сформулировать его ещё раз. "
+    "Прогресс не пострадал."
+)
+QUIZ_UNAVAILABLE = (
+    "Квиз временно недоступен — попробуйте позже. "
+    "Обучение продолжается: /lesson, /review."
+)
+QUIZ_NO_WORDS = (
+    "Пока нечего квизить: сначала пройдите урок — /lesson. "
+    "Квиз собирается из слов, которые уже были в вашем обучении."
+)
+QUIZ_ANSWER_TOO_LONG = "Ответ слишком длинный (до 500 символов) — сократите его."
+QUIZ_STALE = "Этот вопрос уже неактивен. Начните заново: /quiz"
+QUIZ_EXITED = "Квиз завершён. /quiz — новый вопрос."
+QUIZ_NON_TEXT = "Напишите ответ текстом 🙂"
+QUIZ_LEVEL_OFFER = (
+    "\n\n🚀 Устойчивая серия: {streak} верных ответов подряд! "
+    "Готовы к следующему уровню?"
+)
+QUIZ_LEVEL_UP_BUTTON = "🚀 Готов к следующему уровню"
+QUIZ_LEVEL_UP_DONE = (
+    "🎉 Уровень повышен: {level}. Новые карточки будут соответствовать ему."
+)
+QUIZ_LEVEL_UP_DECLINED = (
+    "Уровень пока не повышен — серия верных ответов прервалась или уже "
+    "использована. Продолжайте квиз: /quiz."
+)
+QUIZ_LEVEL_UP_TOP = "Вы уже на максимальном уровне C2 — дальше только практика 💪"
+FORGOTTEN_TITLE = "😵 <b>Топ забытого</b>"
+FORGOTTEN_ITEM = "{number}. <b>{text}</b> — {translation} (провалов: {lapses})"
+FORGOTTEN_EMPTY = (
+    "Забытых слов нет 🙌 Все карточки на месте. Возвращайтесь через неделю."
+)
+FORGOTTEN_THROTTLED = (
+    "Отчёт «Топ забытого» можно смотреть раз в неделю. "
+    "Следующий раз — {date}. А пока: /quiz, /review."
+)
+
+# Map of QuizService reason -> user-facing text (no internal codes), the
+# same contract as CHAT_ERROR_TEXTS: the handler renders strictly from
+# this dict and the parametrized test fails on any reason leaking into
+# the answer.
+QUIZ_ERROR_TEXTS: dict[str, str] = {
+    "no_words": QUIZ_NO_WORDS,
+    "expression_not_found": QUIZ_STALE,
+    "answer_too_long": QUIZ_ANSWER_TOO_LONG,
+    "llm_disabled": QUIZ_UNAVAILABLE,
+    "llm_error": QUIZ_UNAVAILABLE,
+    "invalid_output": QUIZ_EVALUATION_RETRY,
+    "profile_not_found": QUIZ_NO_WORDS,
+}

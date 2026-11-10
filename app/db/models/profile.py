@@ -82,6 +82,20 @@ class Profile(Base):
     lesson_time: Mapped[time] = mapped_column(Time(), nullable=False)
     review_time: Mapped[time] = mapped_column(Time(), nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Active recall quiz (Stage 6.4.6): consecutive correct quiz answers;
+    # reset to zero by any wrong answer or a level promotion. A CEFR
+    # promotion needs N in a row (config) plus explicit confirmation —
+    # one good answer never changes the level.
+    quiz_success_streak: Mapped[int] = mapped_column(
+        Integer,
+        server_default="0",
+        nullable=False,
+    )
+    # The "top forgotten" report is shown at most once per interval.
+    last_forgotten_report_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -89,6 +89,14 @@ class ExpressionProgress(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # How many times the card was reset by a "forgot"/wrong answer —
+    # drives the weekly "top forgotten" report. Maintained by the shared
+    # ``update_srs`` write path, so reviews and quiz answers count alike.
+    lapse_count: Mapped[int] = mapped_column(
+        Integer,
+        server_default="0",
+        nullable=False,
+    )
 
     def __repr__(self) -> str:
         return (

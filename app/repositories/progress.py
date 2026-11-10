@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ExpressionProgress
+from app.db.models import Expression, ExpressionProgress
 from app.domain.srs import FIRST_INTERVAL_DAYS, SrsUpdate
 from app.repositories.errors import wrap_storage_errors
 
@@ -70,6 +70,21 @@ class ExpressionProgressRepository:
                 await self._session.refresh(row)
             return rows
 
+    async def get_least_recently_shown(self, user_id: int) -> ExpressionProgress | None:
+        """The user's served card shown longest ago (quiz fallback).
+
+        Deterministic: no random ordering — the card practised least
+        recently is the natural active-recall candidate.
+        """
+        async with wrap_storage_errors():
+            result = await self._session.execute(
+                select(ExpressionProgress)
+                .where(ExpressionProgress.user_id == user_id)
+                .order_by(ExpressionProgress.shown_at, ExpressionProgress.id)
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
+
     async def get_due(
         self, user_id: int, *, now: datetime, limit: int
     ) -> list[ExpressionProgress]:
@@ -90,13 +105,20 @@ class ExpressionProgressRepository:
     async def update_srs(
         self, progress: ExpressionProgress, srs_update: SrsUpdate
     ) -> ExpressionProgress:
-        """Persist the scheduling state computed for one answer."""
+        """Persist the scheduling state computed for one answer.
+
+        A reset (the new ``review_count`` back at zero) is a lapse: the
+        shared counter behind the weekly "top forgotten" report grows for
+        review answers and quiz answers alike.
+        """
         async with wrap_storage_errors():
             progress.review_count = srs_update.review_count
             progress.ease_factor = srs_update.ease_factor
             progress.interval_days = srs_update.interval_days
             progress.next_review_at = srs_update.next_review_at
             progress.last_reviewed_at = srs_update.answered_at
+            if srs_update.review_count == 0:
+                progress.lapse_count += 1
             await self._session.flush()
             await self._session.refresh(progress)
             return progress
@@ -118,3 +140,28 @@ class ExpressionProgressRepository:
             )
             completed_ids = result.all()
             return len(completed_ids)
+
+    async def get_forgotten_top(
+        self,
+        user_id: int,
+        *,
+        limit: int,
+    ) -> list[tuple[ExpressionProgress, Expression]]:
+        """The user's most forgotten cards: most lapses first, then the
+        most overdue. Cards never answered wrong are not reported."""
+        async with wrap_storage_errors():
+            result = await self._session.execute(
+                select(ExpressionProgress, Expression)
+                .join(Expression, Expression.id == ExpressionProgress.expression_id)
+                .where(
+                    ExpressionProgress.user_id == user_id,
+                    ExpressionProgress.lapse_count > 0,
+                )
+                .order_by(
+                    ExpressionProgress.lapse_count.desc(),
+                    ExpressionProgress.next_review_at.asc().nulls_last(),
+                    ExpressionProgress.id,
+                )
+                .limit(limit)
+            )
+            return [(progress, expression) for progress, expression in result.all()]

@@ -6,6 +6,15 @@ from app.services.lessons import (
     LessonService,
     LessonUnavailable,
 )
+from app.services.quiz import (
+    ForgottenItem,
+    ForgottenReport,
+    ForgottenThrottled,
+    QuizGradeResult,
+    QuizQuestion,
+    QuizService,
+    QuizUnavailable,
+)
 from app.services.profiles import ProfileNotConfiguredError, ProfileService
 from app.services.reviews import (
     ReviewPlan,
@@ -27,12 +36,19 @@ __all__ = [
     "ApiTokenService",
     "ChatService",
     "EventSource",
+    "ForgottenItem",
+    "ForgottenReport",
+    "ForgottenThrottled",
     "GenerationService",
     "LessonPlan",
     "LessonService",
     "LessonUnavailable",
     "ProfileNotConfiguredError",
     "ProfileService",
+    "QuizGradeResult",
+    "QuizQuestion",
+    "QuizService",
+    "QuizUnavailable",
     "ReviewPlan",
     "ReviewService",
     "ReviewUnavailable",

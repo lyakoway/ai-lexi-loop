@@ -33,6 +33,7 @@ from app.services import (
     ChatService,
     LessonService,
     ProfileService,
+    QuizService,
     ReviewService,
     StatsService,
     TutorService,
@@ -88,6 +89,9 @@ class DbSessionMiddleware(BaseMiddleware):
                 analytics,
             )
             data["chat_service"] = ChatService(
+                self._session_factory, self._llm_client, get_settings()
+            )
+            data["quiz_service"] = QuizService(
                 self._session_factory, self._llm_client, get_settings()
             )
             data["tts_service"] = TtsService(
