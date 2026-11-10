@@ -19,6 +19,8 @@ uv.lock.bak
 # Local data
 *.sqlite3
 *.log
+# TTS audio cache (runtime and integration-test fixtures)
+data/
 # Throwaway PostgreSQL cluster for integration tests
 .test_pg/
 

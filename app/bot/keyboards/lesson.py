@@ -4,7 +4,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot import texts
-from app.bot.keyboards.tutor import explain_button
+from app.bot.keyboards.tutor import explain_button, listen_button
 
 
 class LessonCB(CallbackData, prefix="lssn", sep="~"):
@@ -21,7 +21,14 @@ class LessonCB(CallbackData, prefix="lssn", sep="~"):
     index: int
 
 
-def lesson_card_keyboard(*, token: int, index: int, total: int) -> InlineKeyboardMarkup:
+def lesson_card_keyboard(
+    *,
+    token: int,
+    index: int,
+    total: int,
+    expression_id: int,
+    with_audio: bool = False,
+) -> InlineKeyboardMarkup:
     """Keyboard under one card.
 
     The last card offers only finishing — there is no next card.
@@ -35,5 +42,7 @@ def lesson_card_keyboard(*, token: int, index: int, total: int) -> InlineKeyboar
         callback_data=LessonCB(action="finish", token=token, index=index).pack(),
     )
     rows = [[finish_button]] if index >= total - 1 else [[next_button], [finish_button]]
+    audio_button = [listen_button(expression_id=expression_id)] if with_audio else []
+    rows.extend([audio_button] if audio_button else [])
     rows.append([explain_button(token=token, index=index)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

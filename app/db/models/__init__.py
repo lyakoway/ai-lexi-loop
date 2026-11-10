@@ -9,6 +9,7 @@ from app.db.models.identity import UserIdentity
 from app.db.models.llm import LlmCall
 from app.db.models.profile import Profile
 from app.db.models.progress import ExpressionProgress
+from app.db.models.tts import TtsAudio, TtsCall
 from app.db.models.user import User
 
 __all__ = [
@@ -18,6 +19,8 @@ __all__ = [
     "ExpressionProgress",
     "LlmCall",
     "Profile",
+    "TtsAudio",
+    "TtsCall",
     "TutorConversation",
     "TutorMessage",
     "User",

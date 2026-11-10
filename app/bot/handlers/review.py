@@ -46,6 +46,7 @@ async def start_review_for_message(
     user_id: int,
     state: FSMContext,
     review_service: ReviewService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """Build a review session and send its first card."""
     try:
@@ -74,7 +75,12 @@ async def start_review_for_message(
     )
     await message.answer(
         card,
-        reply_markup=review_card_keyboard(token=expression_ids[0], index=0),
+        reply_markup=review_card_keyboard(
+            token=expression_ids[0],
+            index=0,
+            expression_id=expression_ids[0],
+            with_audio=bool((data or {}).get("tts_available")),
+        ),
     )
 
 
@@ -84,6 +90,7 @@ async def _start_by_user(
     message: Message,
     state: FSMContext,
     review_service: ReviewService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     if profile is None:
         await message.answer(texts.PROFILE_EMPTY, reply_markup=profile_empty_keyboard())
@@ -98,6 +105,7 @@ async def cmd_review(
     user_service: UserService,
     profile_service: ProfileService,
     review_service: ReviewService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """Start a review session, or invite to onboarding without a profile."""
     if message.from_user is None:
@@ -112,7 +120,7 @@ async def cmd_review(
         )
         await message.answer(texts.REVIEW_BUILD_FAILED)
         return
-    await _start_by_user(user.id, profile, message, state, review_service)
+    await _start_by_user(user.id, profile, message, state, review_service, data)
 
 
 @router.callback_query(MenuCB.filter(F.action == "review"))
@@ -122,6 +130,7 @@ async def on_menu_review(
     user_service: UserService,
     profile_service: ProfileService,
     review_service: ReviewService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """Start a review session from the main-menu button."""
     await callback.answer()
@@ -135,7 +144,7 @@ async def on_menu_review(
     except StorageError:
         await message.answer(texts.REVIEW_BUILD_FAILED)
         return
-    await _start_by_user(user.id, profile, message, state, review_service)
+    await _start_by_user(user.id, profile, message, state, review_service, data)
 
 
 def _is_current_card(callback_data: ReviewCB, data: dict[str, Any]) -> bool:
@@ -235,7 +244,12 @@ async def on_answer(
         callback.message,
         f"{texts.REVIEW_PREFIX}\n\n"
         + format_card(expression, index=next_index, total=len(expression_ids)),
-        review_card_keyboard(token=data["token"], index=next_index),
+        review_card_keyboard(
+            token=data["token"],
+            index=next_index,
+            expression_id=expression_ids[next_index],
+            with_audio=bool(data.get("tts_available")),
+        ),
     )
 
 

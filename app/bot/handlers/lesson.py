@@ -51,6 +51,7 @@ async def start_lesson_for_message(
     profile: Profile,
     state: FSMContext,
     lesson_service: LessonService,
+    data: dict[str, Any],
 ) -> None:
     """Build a lesson and send its first card."""
     try:
@@ -83,7 +84,11 @@ async def start_lesson_for_message(
     await message.answer(
         card,
         reply_markup=lesson_card_keyboard(
-            token=expression_ids[0], index=0, total=len(expressions)
+            token=expression_ids[0],
+            index=0,
+            total=len(expressions),
+            expression_id=expressions[0].id,
+            with_audio=bool((data or {}).get("tts_available")),
         ),
     )
 
@@ -95,6 +100,7 @@ async def cmd_lesson(
     user_service: UserService,
     profile_service: ProfileService,
     lesson_service: LessonService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """Start a lesson, or invite to onboarding when there is no profile."""
     if message.from_user is None:
@@ -112,7 +118,9 @@ async def cmd_lesson(
     if profile is None:
         await message.answer(texts.PROFILE_EMPTY, reply_markup=profile_empty_keyboard())
         return
-    await start_lesson_for_message(message, user.id, profile, state, lesson_service)
+    await start_lesson_for_message(
+        message, user.id, profile, state, lesson_service, data or {}
+    )
 
 
 @router.callback_query(MenuCB.filter(F.action == "lesson"))
@@ -122,6 +130,7 @@ async def on_menu_lesson(
     user_service: UserService,
     profile_service: ProfileService,
     lesson_service: LessonService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """Start a lesson from the main-menu button."""
     await callback.answer()
@@ -138,7 +147,9 @@ async def on_menu_lesson(
     if profile is None:
         await message.answer(texts.PROFILE_EMPTY, reply_markup=profile_empty_keyboard())
         return
-    await start_lesson_for_message(message, user.id, profile, state, lesson_service)
+    await start_lesson_for_message(
+        message, user.id, profile, state, lesson_service, data or {}
+    )
 
 
 async def _lesson_state_data(
@@ -193,7 +204,11 @@ async def on_next_card(
         callback.message,
         format_card(expression, index=next_index, total=len(expression_ids)),
         lesson_card_keyboard(
-            token=data["token"], index=next_index, total=len(expression_ids)
+            token=data["token"],
+            index=next_index,
+            total=len(expression_ids),
+            expression_id=expression_ids[next_index],
+            with_audio=bool(data.get("tts_available")),
         ),
     )
 

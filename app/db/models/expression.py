@@ -87,6 +87,16 @@ class Expression(Base):
     translation: Mapped[str] = mapped_column(String(256), nullable=False)
     ipa: Mapped[str] = mapped_column(String(64), nullable=False)
     phonetic_hint_ru: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Accent-specific Russian approximations; NULL falls back to the
+    # base hint. Filled for words where US/UK pronunciations genuinely
+    # differ (e.g. schedule).
+    phonetic_hint_ru_us: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    phonetic_hint_ru_uk: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Difficult words keep the Russian hint even after it fades for
+    # everything else (see the hint fading rule in lesson_view).
+    is_difficult: Mapped[bool] = mapped_column(
+        Boolean, server_default="false", nullable=False
+    )
     example: Mapped[str] = mapped_column(Text(), nullable=False)
     example_translation: Mapped[str] = mapped_column(Text(), nullable=False)
     level: Mapped[str] = mapped_column(String(8), nullable=False)

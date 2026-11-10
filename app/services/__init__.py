@@ -14,24 +14,18 @@ from app.services.reviews import (
 )
 from app.services.stats import StatsService
 from app.services.tokens import ApiTokenService, TokenLimitError
+from app.services.tts import TtsService
 from app.services.tutor import (
-    ChatService as _ChatService,
-)
-from app.services.tutor import (
-    GenerationService as _GenerationService,
-)
-from app.services.tutor import (
-    TutorService as _TutorService,
+    ChatService,
+    GenerationService,
+    TutorService,
 )
 from app.services.users import UserService
-
-ChatService = _ChatService
-GenerationService = _GenerationService
-TutorService = _TutorService
 
 __all__ = [
     "AnalyticsService",
     "ApiTokenService",
+    "ChatService",
     "EventSource",
     "GenerationService",
     "LessonPlan",
@@ -44,6 +38,7 @@ __all__ = [
     "ReviewUnavailable",
     "StatsService",
     "TokenLimitError",
+    "TtsService",
     "TutorService",
     "UserService",
 ]

@@ -70,7 +70,7 @@ def test_lesson_callback_format() -> None:
 
 
 def test_middle_card_has_next_and_finish() -> None:
-    keyboard = lesson_card_keyboard(token=42, index=0, total=3)
+    keyboard = lesson_card_keyboard(token=42, index=0, total=3, expression_id=42)
     callbacks = [
         button.callback_data for row in keyboard.inline_keyboard for button in row
     ]
@@ -80,7 +80,7 @@ def test_middle_card_has_next_and_finish() -> None:
 
 def test_last_card_has_finish_and_explain() -> None:
     """The last card drops «next» but keeps finishing and explaining."""
-    keyboard = lesson_card_keyboard(token=42, index=2, total=3)
+    keyboard = lesson_card_keyboard(token=42, index=2, total=3, expression_id=42)
     callbacks = [
         button.callback_data or "" for row in keyboard.inline_keyboard for button in row
     ]

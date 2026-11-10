@@ -48,6 +48,18 @@ class Settings(BaseSettings):
     # AI Tutor Chat (Stage 6.4).
     llm_chat_min_interval_seconds: float = 3.0
     chat_history_last_n: int = 10
+    # Russian hint fades after N weeks unless the word is difficult.
+    phonetic_hint_fade_weeks: int = 8
+    # TTS (Stage 6.4.5). Disabled by default; graceful degradation.
+    tts_enabled: bool = False
+    tts_provider: Literal["openai_compatible"] = "openai_compatible"
+    tts_base_url: str = ""
+    tts_api_key: SecretStr = SecretStr("")
+    tts_model: str = "tts-1"
+    tts_voice: str = "alloy"
+    tts_timeout_seconds: float = 30.0
+    tts_retry_attempts: int = 2
+    tts_cache_dir: str = "data/tts_audio"
     # None → calculated from the full LlmClient budget (initial + repair
     # attempts); a manual value below that budget is rejected at startup.
     llm_chat_claim_timeout_seconds: int | None = None
@@ -87,6 +99,20 @@ class Settings(BaseSettings):
     def _validate_history_limit(cls, value: int) -> int:
         if value < 1:
             raise ValueError("must be at least 1")
+        return value
+
+    @field_validator("tts_timeout_seconds")
+    @classmethod
+    def _validate_tts_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("must be positive")
+        return value
+
+    @field_validator("tts_retry_attempts")
+    @classmethod
+    def _validate_tts_retries(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("must not be negative")
         return value
 
     @model_validator(mode="after")

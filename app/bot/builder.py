@@ -18,11 +18,13 @@ from app.bot.handlers import review as review_handlers
 from app.bot.handlers import settings as settings_handlers
 from app.bot.handlers import start as start_handlers
 from app.bot.handlers import stats_token as stats_token_handlers
+from app.bot.handlers import tts as tts_handlers
 from app.bot.handlers import tutor as tutor_handlers
 from app.bot.middlewares.di import DbSessionMiddleware
 from app.core.config import Settings
 from app.db.session import SessionFactory
 from app.integrations.llm.client import StructuredLlmClient
+from app.integrations.tts.provider import TtsProvider
 
 
 def create_bot(settings: Settings) -> Bot:
@@ -36,6 +38,7 @@ def create_bot(settings: Settings) -> Bot:
 def create_dispatcher(
     session_factory: SessionFactory,
     llm_client: StructuredLlmClient | None = None,
+    tts_provider: TtsProvider | None = None,
 ) -> Dispatcher:
     """Create a Dispatcher wired with handlers and per-update DI.
 
@@ -49,6 +52,7 @@ def create_dispatcher(
     dispatcher.include_router(start_handlers.router)
     dispatcher.include_router(help_handlers.router)
     dispatcher.include_router(chat_handlers.router)
+    dispatcher.include_router(tts_handlers.router)
     dispatcher.include_router(stats_token_handlers.router)
     dispatcher.include_router(generate_handlers.router)
     dispatcher.include_router(navigation_handlers.router)

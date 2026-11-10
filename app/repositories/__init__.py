@@ -11,6 +11,7 @@ from app.repositories.expressions import ExpressionRepository
 from app.repositories.generated import UserGeneratedExpressionRepository
 from app.repositories.profiles import ProfileRepository
 from app.repositories.progress import ExpressionProgressRepository
+from app.repositories.tts_audio import TtsAudioRepository
 from app.repositories.users import UserRepository
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "ExpressionRepository",
     "ProfileRepository",
     "StorageError",
+    "TtsAudioRepository",
     "TutorConversationRepository",
     "TutorMessageRepository",
     "UserGeneratedExpressionRepository",

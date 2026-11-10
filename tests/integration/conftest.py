@@ -97,7 +97,8 @@ async def reset_database(session: AsyncSession) -> None:
     await session.execute(
         text(
             "TRUNCATE analytics_events, api_tokens, user_identities, "
-            "expression_progress, profiles, users, expressions "
+            "expression_progress, profiles, users, expressions, "
+            "tts_calls, tts_audio "
             "RESTART IDENTITY CASCADE"
         )
     )

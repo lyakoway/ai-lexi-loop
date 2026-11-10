@@ -128,6 +128,7 @@ async def on_back_to_card(
     callback_data: TutorCB,
     state: FSMContext,
     lesson_service: LessonService,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """Restore the card view of the active flow."""
     flow = await _active_flow(state)
@@ -157,13 +158,24 @@ async def on_back_to_card(
             callback.message,
             f"{texts.REVIEW_PREFIX}\n\n"
             + format_card(expression, index=index, total=total),
-            review_card_keyboard(token=callback_data.token, index=index),
+            review_card_keyboard(
+                token=callback_data.token,
+                index=index,
+                expression_id=expression.id,
+                with_audio=bool((data or {}).get("tts_available")),
+            ),
         )
         return
     await safe_edit(
         callback.message,
         format_card(expression, index=index, total=total),
-        lesson_card_keyboard(token=callback_data.token, index=index, total=total),
+        lesson_card_keyboard(
+            token=callback_data.token,
+            index=index,
+            total=total,
+            expression_id=expression.id,
+            with_audio=bool((data or {}).get("tts_available")),
+        ),
     )
 
 

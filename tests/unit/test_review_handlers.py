@@ -354,7 +354,7 @@ async def test_stale_callback_without_session() -> None:
 
 
 def test_review_keyboard_callbacks() -> None:
-    keyboard = review_card_keyboard(token=31, index=0)
+    keyboard = review_card_keyboard(token=31, index=0, expression_id=31)
     callbacks = [
         button.callback_data for row in keyboard.inline_keyboard for button in row
     ]

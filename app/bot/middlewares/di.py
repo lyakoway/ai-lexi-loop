@@ -17,6 +17,7 @@ from aiogram.types import TelegramObject
 from app.core.config import get_settings
 from app.db.session import SessionFactory, session_scope
 from app.integrations.llm.client import StructuredLlmClient
+from app.integrations.tts.provider import TtsProvider
 from app.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
@@ -37,6 +38,7 @@ from app.services import (
     TutorService,
     UserService,
 )
+from app.services.tts import TtsService
 from app.services.tutor import GenerationService
 
 
@@ -47,9 +49,11 @@ class DbSessionMiddleware(BaseMiddleware):
         self,
         session_factory: SessionFactory,
         llm_client: StructuredLlmClient | None = None,
+        tts_provider: TtsProvider | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._llm_client = llm_client
+        self._tts_provider = tts_provider
 
     async def __call__(
         self,
@@ -86,6 +90,13 @@ class DbSessionMiddleware(BaseMiddleware):
             data["chat_service"] = ChatService(
                 self._session_factory, self._llm_client, get_settings()
             )
+            data["tts_service"] = TtsService(
+                self._session_factory,
+                self._tts_provider,
+                get_settings().tts_cache_dir,
+                default_voice=get_settings().tts_voice,
+            )
+            data["tts_available"] = self._tts_provider is not None
             data["token_service"] = ApiTokenService(ApiTokenRepository(session))
             data["tutor_service"] = TutorService(
                 data["profile_service"],
