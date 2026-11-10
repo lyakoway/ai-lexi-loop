@@ -4,6 +4,8 @@ Kept in one module so wording can be reviewed in a single place and later
 replaced with per-user localization without touching handler logic.
 """
 
+from app.domain.languages import supported_target_languages
+
 # ---------------------------------------------------------------------------
 # Commands and menus
 # ---------------------------------------------------------------------------
@@ -137,7 +139,9 @@ ONBOARDING_PROMPTS: dict[str, str] = {
 
 LANGUAGE_LABELS: dict[str, str] = {
     "ru": "🇷🇺 Русский",
-    "en": "🇬🇧 English",
+    # Target languages come from the language profile registry: adding a
+    # language there automatically extends every keyboard and profile view.
+    **{profile.code: profile.label for profile in supported_target_languages()},
 }
 
 LEVEL_BUTTON_LABELS: dict[str, str] = {
@@ -508,3 +512,18 @@ QUIZ_ERROR_TEXTS: dict[str, str] = {
     "invalid_output": QUIZ_EVALUATION_RETRY,
     "profile_not_found": QUIZ_NO_WORDS,
 }
+
+# ---------------------------------------------------------------------------
+# Level placement diagnostic (Stage 6.4.7)
+# ---------------------------------------------------------------------------
+
+PLACEMENT_RUNNING = "🔍 Готовлю диагностику уровня…"
+PLACEMENT_UNAVAILABLE = "Диагностика временно недоступна — выберите уровень вручную."
+PLACEMENT_QUESTION = "Вопрос {number} из {total}\n\n{question}"
+PLACEMENT_RECOMMENDED = (
+    "Диагностика завершена 🎉\n\nПо вашим ответам рекомендуемый уровень — "
+    "<b>{level}</b>.\nЕго можно подтвердить или выбрать вручную."
+)
+PLACEMENT_STALE = "Диагностика уже неактивна — вернитесь к выбору уровня."
+BTN_CONFIRM_LEVEL = "✅ Подтвердить {level}"
+BTN_PICK_MANUAL = "✍️ Выбрать уровень вручную"

@@ -7,12 +7,13 @@ from datetime import datetime, timedelta
 
 from app.bot import texts
 from app.db.models import Expression
+from app.domain.languages import get_language_profile
 
 _CARD_TEMPLATE = (
     "📚 Карточка {number} из {total} · {level} · {topic}\n"
     "\n"
     "<b>{text}</b>\n"
-    "/{ipa}/\n"
+    "{ipa_block}"
     "{hint_block}"
     "🇷🇺 {translation}\n"
     "\n"
@@ -61,18 +62,27 @@ def format_card(
 ) -> str:
     """Render one card; ``index`` is zero-based.
 
-    ``hint_text`` absent → the hint block is omitted (faded hint);
-    IPA stays on the card in every case.
+    Transcription display rules come from the language profile of the
+    expression (config, not code): ``show_ipa`` toggles the IPA line,
+    ``show_phonetic_hint`` the Russian approximation. The fading rule
+    (``show_hint``) can hide the hint block on top of that; unknown
+    languages get the permissive defaults (both lines shown).
     """
+    language = get_language_profile(expression.language)
     hint_text = phonetic_hint_for(expression, accent)
-    hint_block = f"🗣 {_escape(hint_text)}\n" if show_hint and hint_text else ""
+    ipa_block = f"/{_escape(expression.ipa)}/\n" if language.show_ipa else ""
+    hint_block = (
+        f"🗣 {_escape(hint_text)}\n"
+        if show_hint and language.show_phonetic_hint and hint_text
+        else ""
+    )
     return _CARD_TEMPLATE.format(
         number=index + 1,
         total=total,
         level=expression.level,
         topic=texts.TOPIC_LABELS.get(expression.topic, expression.topic),
         text=_escape(expression.text),
-        ipa=_escape(expression.ipa),
+        ipa_block=ipa_block,
         hint_block=hint_block,
         translation=_escape(expression.translation),
         example=_escape(expression.example),

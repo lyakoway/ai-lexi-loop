@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.bot import texts
 from app.bot.keyboards.callbacks import OnboardingCB
+from app.domain.languages import supported_target_languages
 from app.domain.profile import (
     LESSON_HOUR_CHOICES,
     POPULAR_TIMEZONES,
@@ -69,14 +70,19 @@ def options_for_step(step: str) -> list[tuple[str, str]]:
     if step == "native_language":
         return [("ru", texts.LANGUAGE_LABELS["ru"])]
     if step == "target_language":
-        return [("en", texts.LANGUAGE_LABELS["en"])]
+        # Registry-driven: adding a language profile extends the choice
+        # without any code change (see README, "Как добавить язык").
+        return [
+            (profile.code, texts.LANGUAGE_LABELS.get(profile.code, profile.label))
+            for profile in supported_target_languages()
+        ]
     if step == "level":
         options = [
             (level.value, texts.LEVEL_BUTTON_LABELS[level.value])
             for level in Level
             if level is not Level.UNKNOWN
         ]
-        options.append((Level.UNKNOWN.value, "🔍 Не знаю свой уровень"))
+        options.append((Level.UNKNOWN.value, "🔍 Не знаю — определить тестом"))
         return options
     if step == "learning_goal":
         return [(goal.value, texts.GOAL_LABELS[goal.value]) for goal in LearningGoal]

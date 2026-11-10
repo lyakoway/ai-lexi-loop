@@ -32,6 +32,7 @@ from app.services import (
     ApiTokenService,
     ChatService,
     LessonService,
+    PlacementService,
     ProfileService,
     QuizService,
     ReviewService,
@@ -93,6 +94,9 @@ class DbSessionMiddleware(BaseMiddleware):
             )
             data["quiz_service"] = QuizService(
                 self._session_factory, self._llm_client, get_settings()
+            )
+            data["placement_service"] = PlacementService(
+                self._llm_client, get_settings()
             )
             data["tts_service"] = TtsService(
                 self._session_factory,

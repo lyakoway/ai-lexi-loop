@@ -37,10 +37,10 @@ from app.bot.keyboards.onboarding import (
 )
 from app.bot.messages import safe_edit
 from app.bot.profile_view import format_draft
-from app.domain.profile import resolve_timezone
+from app.domain.profile import Level, resolve_timezone
 from app.repositories import StorageError
 from app.schemas.profile import ProfileCreate
-from app.services import ProfileService, UserService
+from app.services import PlacementService, ProfileService, UserService
 
 logger = logging.getLogger(__name__)
 
@@ -161,14 +161,28 @@ async def on_answer(
     callback: CallbackQuery,
     callback_data: OnboardingCB,
     state: FSMContext,
+    placement_service: PlacementService,
 ) -> None:
-    """Store a single-choice answer and move to the next step."""
+    """Store a single-choice answer and move to the next step.
+
+    The "unknown level" option does not store anything: it starts the
+    level-placement diagnostic, whose confirmed result is written into
+    the draft instead.
+    """
     step = await _current_step(state)
     if step is None or step != callback_data.step or step == "topics":
         await callback.answer(texts.ONBOARDING_STALE, show_alert=False)
         return
     if callback_data.value not in step_values(step):
         await callback.answer(texts.ONBOARDING_INVALID_ANSWER)
+        return
+    if step == "level" and callback_data.value == Level.UNKNOWN.value:
+        # Deferred import: the placement module imports this module's
+        # step helpers, so a module-level import would be circular.
+        from app.bot.handlers.placement import start_placement
+
+        await callback.answer()
+        await start_placement(callback, state, placement_service)
         return
     await state.update_data({step: callback_data.value})
     await callback.answer()

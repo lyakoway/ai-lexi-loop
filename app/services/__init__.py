@@ -6,6 +6,13 @@ from app.services.lessons import (
     LessonService,
     LessonUnavailable,
 )
+from app.services.placement import (
+    PlacementQuestion,
+    PlacementService,
+    PlacementSet,
+    PlacementUnavailable,
+)
+from app.services.profiles import ProfileNotConfiguredError, ProfileService
 from app.services.quiz import (
     ForgottenItem,
     ForgottenReport,
@@ -15,7 +22,6 @@ from app.services.quiz import (
     QuizService,
     QuizUnavailable,
 )
-from app.services.profiles import ProfileNotConfiguredError, ProfileService
 from app.services.reviews import (
     ReviewPlan,
     ReviewService,
@@ -43,6 +49,10 @@ __all__ = [
     "LessonPlan",
     "LessonService",
     "LessonUnavailable",
+    "PlacementQuestion",
+    "PlacementService",
+    "PlacementSet",
+    "PlacementUnavailable",
     "ProfileNotConfiguredError",
     "ProfileService",
     "QuizGradeResult",

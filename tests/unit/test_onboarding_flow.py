@@ -19,9 +19,14 @@ from app.bot.keyboards.callbacks import OnboardingCB
 from app.db.models import User
 from app.repositories import StorageError
 from app.schemas.profile import ProfileCreate
-from app.services import ProfileService, UserService
+from app.services import PlacementService, ProfileService, UserService
 
 TEST_USER = User(id=11)
+
+# The diagnostic service is never invoked by regular answers; a strict
+# mock proves it when a test presses a concrete level instead of the
+# "unknown level" option.
+PLACEMENT_SERVICE = AsyncMock(spec=PlacementService)
 
 
 def make_state() -> FSMContext:
@@ -58,7 +63,9 @@ def edited_texts(callback: Any) -> list[str]:
 
 
 async def answer_step(callback: Any, state: FSMContext, step: str, value: str) -> None:
-    await onboarding_handlers.on_answer(callback, cb("ans", step, value), state)
+    await onboarding_handlers.on_answer(
+        callback, cb("ans", step, value), state, PLACEMENT_SERVICE
+    )
 
 
 async def drive_full_flow(callback: Any, state: FSMContext) -> None:
@@ -230,8 +237,10 @@ async def test_skip_optional_and_reject_required() -> None:
     await onboarding_handlers.on_skip(callback, cb("skip", "level"), state)
     callback.answer.assert_awaited_with(texts.ONBOARDING_CANT_SKIP)
 
-    # walk to the accent step and skip it
-    await answer_step(callback, state, "level", "unknown")
+    # walk to the accent step and skip it («unknown» now starts the
+    # level diagnostic — covered in test_placement_flow; here a
+    # concrete level is pressed)
+    await answer_step(callback, state, "level", "B1")
     await answer_step(callback, state, "learning_goal", "for_myself")
     await onboarding_handlers.on_topic_toggle(
         callback, cb("toggle", "topics", "sport"), state

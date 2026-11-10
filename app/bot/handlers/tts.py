@@ -2,8 +2,9 @@
 
 Ownership: the expression must have been served to the user (progress
 row) — the TTS service checks it and reports not_found for foreign
-expressions without any synthesis work. The user's preferred accent
-comes from their profile.
+expressions without any synthesis work. The user's preferred accent and
+the target language select the voice: the language profile config maps
+accents to voices, falling back to the global default voice.
 """
 
 import logging
@@ -14,7 +15,11 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import FSInputFile
 
 from app.bot import texts
-from app.services.tts import TtsService, TtsUnavailable
+from app.bot.handlers.navigation import resolve_user_and_profile
+from app.domain.languages import get_language_profile
+from app.repositories import StorageError
+from app.services import ProfileService, TtsService, UserService
+from app.services.tts import TtsUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +36,32 @@ class TtsCB(CallbackData, prefix="tts", sep="~"):
 async def on_listen(
     callback_query: Any,
     callback_data: TtsCB,
+    user_service: UserService,
+    profile_service: ProfileService,
     tts_service: TtsService,
-    profile_service: Any,
 ) -> None:
     """Send the expression's audio as a separate voice message."""
     if callback_query.message is None or callback_query.from_user is None:
         return
-    profile = await profile_service.get_by_user_id(callback_query.from_user.id)
+    try:
+        user, profile = await resolve_user_and_profile(
+            callback_query.from_user.id, user_service, profile_service
+        )
+    except StorageError:
+        logger.exception(
+            "failed to load user for tts, telegram_user_id=%s",
+            callback_query.from_user.id,
+        )
+        await callback_query.answer(texts.TTS_UNAVAILABLE, show_alert=True)
+        return
     accent = profile.preferred_accent if profile else "us"
+    language = profile.target_language if profile else "en"
+    voice = get_language_profile(language).voice_for(accent)
 
     audio = await tts_service.get_or_synthesize(
-        user_id=callback_query.from_user.id,
+        user_id=user.id,
         expression_id=callback_data.expression_id,
-        voice=tts_service.default_voice,
+        voice=voice,
         accent=accent,
     )
     if isinstance(audio, TtsUnavailable):

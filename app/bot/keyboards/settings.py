@@ -12,6 +12,7 @@ from app.bot.keyboards.onboarding import (
 
 #: Fields editable one at a time, in menu display order.
 EDITABLE_FIELDS: tuple[str, ...] = (
+    "target_language",
     "level",
     "learning_goal",
     "topics",
